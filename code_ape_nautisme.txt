@@ -1,0 +1,7 @@
+3012Z - Construction de bateaux de plaisance
+3011Z - Construction de navires et de structures flottantes
+3315Z - Réparation et maintenance navale
+5010Z - Transports maritimes et côtiers de passagers
+5020Z - Transports maritimes et côtiers de fret
+5222Z - Services auxiliaires des transports par eau
+7734Z - Location et location-bail de matériels de transport par eau
