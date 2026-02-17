@@ -20,6 +20,11 @@ import argparse
 import subprocess
 import platform
 
+# S'assurer que la racine du projet est dans le sys.path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
+
 from Scripts.prospect_analyzer import (
     filter_companies_by_employees,
     verify_websites_by_domain,
