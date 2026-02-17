@@ -1,186 +1,119 @@
-# BotParser NAUTISME
+# Prospection SEO Nautisme
 
-## Vue d'ensemble
+Outil de prospection commerciale automatisé ciblant le secteur nautique français. Le pipeline identifie les entreprises du secteur, trouve leurs sites web, audite leur qualité via Google Lighthouse, et génère un rapport de scoring : plus le site est mal optimisé, plus l'entreprise est un prospect intéressant pour des services web.
 
-**BotParser NAUTISME** est un outil de prospection commerciale automatisé ciblant l'industrie nautique française. Le système identifie, analyse et évalue les entreprises du secteur nautique ayant un potentiel commercial élevé pour des services de développement ou d'optimisation web.
+## Pipeline
 
-## Objectif principal
+Le pipeline complet s'exécute en **5 étapes** via un seul script :
 
-L'outil génère automatiquement une liste de prospects commerciaux qualifiés en :
+```bash
+python Scripts/run_full_pipeline.py
+```
 
-1. **Identifiant les entreprises nautiques** via les bases de données officielles (codes APE/NAF spécifiques)
-2. **Découvrant leurs sites web** par recherche automatisée (Selenium + DuckDuckGo)
-3. **Auditant la qualité des sites** avec Google Lighthouse (performance, SEO, accessibilité)
-4. **Calculant un score de prospect** : plus le site est de mauvaise qualité, plus l'entreprise est un prospect intéressant
-5. **Extrayant les emails de contact** pour faciliter la prise de contact
+| Étape | Description | Détail |
+|-------|-------------|--------|
+| 1 | **Filtrage** | Filtre la base INSEE par codes NAF nautisme (10 codes), tranche d'effectifs (10+ salariés), statut actif, et déduplique par SIREN |
+| 2 | **Recherche de sites** | Recherche DuckDuckGo automatisée via Selenium headless, validation par correspondance nom/domaine, exclusion des annuaires |
+| 3 | **Vérification** | Vérifie chaque site trouvé par matching domaine/nom d'entreprise, avec blocklist de faux positifs |
+| 4 | **Audit Lighthouse** | Exécute `npx lighthouse` sur chaque site vérifié, génère un rapport JSON par entreprise |
+| 5 | **Scoring** | Calcule un score de prospect (1-10) à partir des scores Lighthouse, trie par potentiel décroissant |
 
-**Principe clé** : Une entreprise avec un site web mal optimisé = un client potentiel pour des services web.
+### Options CLI
 
-## Technologies utilisées
+```
+--no-fresh            Ne pas nettoyer les anciens résultats avant exécution
+--limit N             Limiter le nombre d'entreprises (pour les tests)
+--skip-lighthouse     Passer l'étape Lighthouse
+--keep-intermediates  Conserver les fichiers intermédiaires
+```
 
-- **Python 3** - Langage principal
-- **Selenium 4** - Automatisation de navigateur web
-- **BeautifulSoup4** - Extraction de données HTML
-- **Pandas** - Manipulation de données
-- **Google Lighthouse** - Audit de qualité web
-- **DuckDuckGo** - Moteur de recherche pour la découverte de sites
+## Codes NAF ciblés
+
+| Code | Activité |
+|------|----------|
+| 3012Z | Construction de bateaux de plaisance |
+| 3011Z | Construction de navires et structures flottantes |
+| 3315Z | Réparation et maintenance navale |
+| 5010Z | Transports maritimes et côtiers de passagers |
+| 5020Z | Transports maritimes et côtiers de fret |
+| 5222Z | Services auxiliaires des transports par eau |
+| 7734Z | Location de matériels de transport par eau |
+| 7721Z | Location d'articles de loisirs (bateaux plaisance) |
+| 4764Z | Commerce de détail d'articles de sport (accastillage) |
+| 9329Z | Activités récréatives (marinas) |
+
+Les codes et tranches d'effectifs sont configurables en tête de `Scripts/run_full_pipeline.py`.
+
+## Formule de scoring
+
+```
+prospect_score = ((1 - seo) * 1.5 + (1 - perf) * 1.2 + (1 - acc) * 0.8) / 3.5 * 10
+```
+
+- **Score 8-10** : site de mauvaise qualité = excellent prospect
+- **Score 4-7** : prospect modéré, améliorations possibles
+- **Score 1-3** : site bien optimisé = prospect faible
 
 ## Structure du projet
 
 ```
-botparser_NAUTISME/
-├── DataBase/                         # Données sources
-│   ├── StockUniteLegale_utf8.csv    # Base SIREN nationale (INSEE)
-│   └── annuaire-des-entreprises-*.csv
+├── Scripts/
+│   ├── run_full_pipeline.py      # Pipeline principal (point d'entrée)
+│   ├── prospect_analyzer.py      # Filtrage, vérification, Lighthouse, scoring
+│   └── find_websites.py          # Recherche de sites via Selenium/DuckDuckGo
 │
-├── Results/                          # Résultats de pipeline
-│   ├── filtered_companies.csv
-│   ├── filtered_companies_websites.csv
-│   └── final_prospect_report.csv
+├── DataBase/
+│   └── annuaire-des-entreprises-nouvelle_aquitaine.csv  # Base source
 │
-├── Reports/Lighthouse/               # Rapports d'audit individuels
-│   └── {SIREN}_report.json
+├── Results/
+│   └── final_prospect_report.csv  # Rapport final (seul fichier conservé)
 │
-└── Scripts/                          # Scripts de traitement
-    ├── botparser.py                 # Orchestrateur principal
-    ├── filter_companies.py          # Filtrage par code NAF
-    ├── find_websites.py             # Découverte de sites web
-    ├── analyze_websites.py          # Audit Lighthouse
-    ├── prospect_analyzer.py         # Module de scoring
-    └── find_emails.py               # Extraction d'emails
+├── Reports/Lighthouse/
+│   └── {SIREN}_report.json        # Rapports Lighthouse individuels
+│
+├── code_ape_nautisme.txt          # Référence des codes NAF nautisme
+├── requirements.txt
+└── .gitignore
 ```
 
-## Codes NAF ciblés (secteur nautique)
-
-Les codes APE/NAF visés sont définis dans `code_ape_nautisme.txt` :
-
-- **3012Z** - Construction de bateaux de plaisance
-- **3011Z** - Construction de navires et de structures flottantes
-- **3315Z** - Réparation et maintenance navale
-
-## Pipeline de traitement
-
-### Étape 1 : Filtrage des entreprises
-```bash
-python Scripts/filter_companies.py
-```
-- Lit la base SIREN nationale
-- Filtre par codes NAF nautiques
-- Exclut les entreprises inactives
-- Filtre par taille (minimum 10+ employés)
-- **Sortie** : `Results/filtered_companies.csv`
-
-### Étape 2 : Découverte des sites web
-```bash
-python Scripts/find_websites.py
-```
-- Recherche DuckDuckGo automatisée via Selenium
-- Validation du domaine par correspondance avec le nom d'entreprise
-- Exclusion des annuaires (pappers.fr, societe.com, etc.)
-- Support de reprise après interruption
-- **Sortie** : `Results/filtered_companies_websites.csv`
-
-### Étape 3 : Analyse et scoring
-```bash
-python Scripts/analyze_websites.py
-```
-- Vérification de propriété du site web
-- Audit Google Lighthouse de chaque site
-- Calcul du score de prospect (1-10)
-- Tri par score décroissant
-- **Sortie** : `Results/final_prospect_report.csv`
-
-### Étape optionnelle : Extraction d'emails
-```bash
-python Scripts/find_emails.py
-```
-- Scraping HTML des pages de contact
-- Priorisation des emails (domaine de l'entreprise > emails génériques)
-- **Sortie** : `resultats_avec_emails.csv`
-
-## Formule de scoring
-
-Le score de prospect est calculé selon la formule :
-
-```python
-score = ((1 - seo) * 1.5 + (1 - perf) * 1.2 + (1 - acc) * 0.8) / 3.5 * 10
-```
-
-**Résultat** : Score de 1 à 10 où :
-- **Score élevé** (8-10) = Site de mauvaise qualité = Meilleur prospect
-- **Score faible** (1-3) = Site bien optimisé = Prospect moins intéressant
-
-## Exécution rapide
-
-### Pipeline complet
-```bash
-python Scripts/botparser.py --naf 301 --csv DataBase/StockUniteLegale_utf8.csv --employees 10
-```
-
-ou
-
-```bash
-python run_full_pipeline.py
-```
-
-### Ré-analyse des données existantes
-```bash
-python run_full_reanalysis.py
-```
-
-### Scoring uniquement
-```bash
-python run_scoring.py
-```
-
-## Configuration requise
-
-1. Python 3.x avec les dépendances dans `.venv/`
-2. Node.js (pour `npx lighthouse`)
-3. ChromeDriver (fourni dans `chromedriver_win32/`)
-4. Connexion Internet pour les recherches et audits
+Les fichiers intermédiaires (`filtered_companies.csv`, `*_websites.csv`, `verified_websites.csv`, `lighthouse_reports.csv`) sont créés pendant l'exécution et supprimés automatiquement à la fin.
 
 ## Installation
 
 ```bash
-# Activer l'environnement virtuel (Windows)
-.venv\Scripts\activate
+# Cloner le repo
+git clone https://github.com/Bist0uille/prospection_seo.git
+cd prospection_seo
 
-# Installer les dépendances
-pip install selenium beautifulsoup4 pandas requests tqdm webdriver-manager python-dotenv
+# Créer un environnement virtuel et installer les dépendances
+python -m venv .venv
+source .venv/bin/activate  # Linux/WSL
+# ou .venv\Scripts\activate  # Windows
+pip install -r requirements.txt
 
-# Installer Lighthouse
+# Installer Lighthouse (nécessite Node.js)
 npm install -g lighthouse
 ```
 
-## Fichiers de données
+Chrome ou Chromium doit être installé. Sur WSL sans Chrome Linux, le script détecte et utilise automatiquement [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) s'il est présent dans `~/.chrome-for-testing/`.
 
-- **`DataBase/StockUniteLegale_utf8.csv`** : Base SIREN nationale (~940 Mo décompressé)
-- **`code_ape_nautisme.txt`** : Liste des codes NAF ciblés
-- **`methodo.txt`** : Méthodologie détaillée en français
+## Sortie
 
-## Notes techniques
+Le rapport final `Results/final_prospect_report.csv` contient :
 
-- Le script `find_websites.py` sauvegarde la progression après chaque entreprise
-- Les rapports Lighthouse sont stockés individuellement dans `Reports/Lighthouse/`
-- Le projet fonctionne sur Windows/WSL avec des chemins compatibles
-- Certains scripts legacy (`get_all_data_multi_page.py`, `botparser_log.py`) proviennent d'une version antérieure ciblant les architectes
+| Colonne | Description |
+|---------|-------------|
+| `siren` | Identifiant SIREN |
+| `denominationUniteLegale` | Nom de l'entreprise |
+| `trancheEffectifsUniteLegale` | Code tranche d'effectifs |
+| `site_web` | URL du site trouvé |
+| `prospect_score` | Score de 1 à 10 (plus = meilleur prospect) |
+| `performance` | Score Lighthouse performance (0-100) |
+| `seo` | Score Lighthouse SEO (0-100) |
+| `accessibilite` | Score Lighthouse accessibilité (0-100) |
+| `bonnes_pratiques` | Score Lighthouse bonnes pratiques (0-100) |
+| `prospect_summary` | Résumé textuel du potentiel |
 
-## Résultats
+## Considérations légales
 
-Le fichier final `Results/final_prospect_report.csv` contient :
-- Informations entreprise (SIREN, nom, adresse)
-- URL du site web
-- Scores Lighthouse (SEO, Performance, Accessibilité, Best Practices)
-- **Score de prospect** (trié par ordre décroissant)
-- Statut de vérification du site
-
-Les meilleurs prospects sont en haut de la liste.
-
-## Considérations éthiques et légales
-
-La collecte automatisée de données, en particulier d'informations de contact, doit être effectuée dans le respect des directives légales et éthiques (RGPD, conditions d'utilisation des sites web). Cet outil est fourni à des fins d'analyse et de collecte d'informations, et son utilisation doit être conforme à toutes les réglementations applicables.
-
-## Auteur
-
-Projet de prospection commerciale pour le secteur nautique français.
+La collecte automatisée de données doit être effectuée dans le respect du RGPD et des conditions d'utilisation des sites web. Cet outil est fourni à des fins d'analyse commerciale.
