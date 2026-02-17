@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.venv_linux/
+
+# Données volumineuses
+DataBase/StockUniteLegale_utf8.csv
+StockUniteLegale_utf8.zip
+
+# Fichiers intermédiaires
+Results/filtered_companies.csv
+Results/filtered_companies_websites.csv
+Results/verified_websites.csv
+Results/lighthouse_reports.csv
+Results/all_websites_results.csv
+Results/websites_selenium_results.csv
+Results/websites_test_result.csv
+Results/test_companies_for_website_finder.csv
+Results/test_companies_for_website_finder_websites.csv
+Results/annuaire-*.csv
+Results/cleaned_*.csv
+
+# Logs
+*.log
+
+# Chromedriver cache
+.chromedriver/
+chromedriver_win32/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+.DS_Store
+
+# Gemini
+.gemini-clipboard/
+
+# LibreOffice lock files
+DataBase/.~lock.*

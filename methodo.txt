@@ -1,0 +1,42 @@
+  Méthodologie Proposée : Système d'Analyse et de Scoring de Potentiel
+
+  Prérequis : Conversion du fichier de données
+  Je ne peux pas lire directement le format .ods. Pour que le système fonctionne, la toute première étape sera pour vous de convertir le fichier `archi_avec_site.ods` en un fichier CSV nommé `archi_avec_site.csv` et de le placer dans le répertoire actuel. Les fichiers CSV sont un standard que je peux traiter de manière fiable.
+
+  ---
+
+  Phase 1 : Initialisation de l'Environnement
+   1. Je créerai un nouveau dossier nommé rapports/ dans le répertoire actuel.
+   2. Ce dossier servira à stocker les rapports d'audit détaillés pour chaque site web analysé, vous permettant de consulter les détails techniques à tout moment.
+
+  Phase 2 : Boucle d'Analyse Automatisée
+  Pour chaque ligne du fichier archi_avec_site.csv :
+   1. Extraction de l'URL : Je lirai la ligne pour extraire l'URL du site web à analyser.
+   2. Audit Lighthouse : J'exécuterai un audit Google Lighthouse complet sur cette URL, comme nous l'avons fait précédemment.
+   3. Stockage du Rapport Brut : Le rapport JSON complet généré par Lighthouse sera sauvegardé dans le dossier rapports/. Le nom du fichier sera basé sur le nom de domaine pour une identification facile (par exemple, rapports/architectecarolebegue_fr.json).
+   4. Analyse et Calcul des Scores : C'est l'étape la plus importante. Je ne vais pas me contenter de prendre les scores bruts. Je vais analyser le rapport en profondeur pour calculer une "Note de Potentiel" personnalisée.
+
+  Phase 3 : Calcul de la "Note de Potentiel" (La Logique Clé)
+  L'objectif n'est pas de noter la qualité actuelle du site, mais plutôt son potentiel d'amélioration avec un effort limité. Un site avec une mauvaise note mais des problèmes faciles à corriger aura une "Note de Potentiel" très élevée.
+
+  Ma formule combinera deux axes :
+   1. Marge de Progression (Base de la note) : Un score de base sera calculé à partir du score de performance. Plus le score de performance est bas, plus la marge de progression est grande. (Base = 100 - Score de Performance).
+   2. Bonus "Actions Simples à Fort Impact" : J'analyserai le rapport pour détecter des problèmes spécifiques, faciles à corriger, et j'attribuerai des points de bonus pour chaque problème trouvé :
+       * +20 points si des images très lourdes et non optimisées sont détectées (gain de performance énorme).
+       * +15 points si aucune politique de mise en cache n'est en place (très simple à corriger via serveur).
+       * +15 points si des ressources bloquent le rendu de la page (CSS/JS).
+       * +10 points pour chaque en-tête de sécurité majeur manquant (CSP, HSTS, etc.).
+       * +10 points si les balises SEO de base sont absentes (méta-description, etc.).
+       * +5 points pour des problèmes d'accessibilité simples (absence de repère <main>, etc.).
+
+  La Note de Potentiel finale sera la somme de ces éléments. Un score élevé signifiera : "Ce site est un candidat idéal pour une intervention rapide et à forte valeur ajoutée."
+
+  Phase 4 : Consolidation et Rapport Final
+   1. Une fois tous les sites analysés, je créerai un nouveau fichier CSV de synthèse, nommé par exemple resultats_analyse_architectes.csv.
+   2. Ce fichier contiendra les informations initiales (Nom de l'architecte, URL) et y ajoutera plusieurs colonnes clés pour chaque site :
+       * Score Performance
+       * Score Accessibilité
+       * Score SEO
+       * `Note de Potentiel` (notre indicateur principal)
+       * Actions Suggérées (un bref résumé des "actions simples à fort impact" identifiées).
+   3. Pour une lisibilité maximale, ce fichier final sera trié par `Note de Potentiel` descendante, plaçant ainsi les clients les plus prometteurs en haut de la liste.
