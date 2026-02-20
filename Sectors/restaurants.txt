@@ -1,0 +1,9 @@
+# Secteur : Restauration
+# Source : INSEE NAF rév. 2
+# Usage  : python Scripts/run_full_pipeline.py --sector Sectors/restaurants.txt --min-employees 1
+
+5610A - Restauration traditionnelle
+5610B - Cafétérias et autres libres-services
+5610C - Restauration de type rapide
+5630Z - Débits de boissons
+5621Z - Services des traiteurs

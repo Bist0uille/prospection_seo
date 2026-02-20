@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-Pipeline de prospection SEO nautisme.
+Pipeline de prospection SEO – outil universel multi-secteur.
 
-Exécute le pipeline complet :
-  1. Filtrage par codes NAF nautisme + tranche d'effectifs
-  2. Recherche de sites web (Selenium / DuckDuckGo)
-  3. Vérification des sites par domaine
-  4. Audits Lighthouse
-  5. Scoring de prospection
+Usage :
+  python Scripts/run_full_pipeline.py --sector Sectors/nautisme.txt
+  python Scripts/run_full_pipeline.py --codes 3012Z,3011Z,3315Z --name nautisme
+  python Scripts/run_full_pipeline.py --sector Sectors/architectes.txt --limit 50
+  python Scripts/run_full_pipeline.py --sector Sectors/restaurants.txt --min-employees 1
 
-Usage:
-  python run_full_pipeline.py [--no-fresh] [--limit N] [--skip-lighthouse]
+Les résultats sont isolés par secteur dans Results/{nom_secteur}/.
 """
 
 import os
@@ -28,56 +26,86 @@ sys.path.insert(0, PROJECT_ROOT)
 from Scripts.prospect_analyzer import (
     filter_companies_by_employees,
     verify_websites_by_domain,
-    run_lighthouse_reports,
-    create_prospect_scoring,
+    create_prospect_scoring_v2,
 )
+from Scripts.seo_auditor import run_seo_audit
 
 # ============================================================================
-# CONFIGURATION
+# TRANCHES D'EFFECTIFS INSEE
 # ============================================================================
 
-BASE_CSV = 'DataBase/annuaire-des-entreprises-nouvelle_aquitaine.csv'
-
-NAF_CODES_NAUTISME = [
-    '3012Z',  # Construction de bateaux de plaisance
-    '3011Z',  # Construction de navires et structures flottantes
-    '3315Z',  # Réparation et maintenance navale
-    '5010Z',  # Transports maritimes et côtiers de passagers
-    '5020Z',  # Transports maritimes et côtiers de fret
-    '5222Z',  # Services auxiliaires des transports par eau
-    '7734Z',  # Location de matériels de transport par eau
-    '7721Z',  # Location d'articles de loisirs (bateaux plaisance)
-    '4764Z',  # Commerce de détail d'articles de sport (accastillage)
-    '9329Z',  # Activités récréatives (marinas)
+# Codes INSEE tranche d'effectifs et leur borne inférieure
+_EMPLOYEE_THRESHOLDS = [
+    (0,     'NN'), (0,     '00'), (1,   '01'), (3,   '02'), (6,   '03'),
+    (10,    '11'), (20,    '12'), (50,  '21'), (100, '22'), (200, '31'),
+    (250,   '32'), (500,   '41'), (1000,'42'), (2000,'51'), (5000,'52'),
+    (10000, '53'),
 ]
 
-EMPLOYEE_CODES = ['11', '12', '21', '22', '31', '32', '41', '42', '51', '52', '53']
 
-# Fichiers intermédiaires (nettoyés en fin de pipeline)
-FILTERED_CSV = 'Results/filtered_companies.csv'
-WEBSITES_CSV = 'Results/filtered_companies_websites.csv'
-VERIFIED_CSV = 'Results/verified_websites.csv'
-LIGHTHOUSE_CSV = 'Results/lighthouse_reports.csv'
+def get_employee_codes(min_employees: int) -> list:
+    """Retourne les codes INSEE tranche d'effectifs pour un minimum donné.
 
-# Fichier final (conservé)
-FINAL_REPORT_CSV = 'Results/final_prospect_report.csv'
-LIGHTHOUSE_DIR = 'Reports/Lighthouse'
+    Exemple :
+        get_employee_codes(10)  → ['11', '12', '21', '22', '31', '32', '41', '42', '51', '52', '53']
+        get_employee_codes(0)   → tous les codes (pas de filtre)
+    """
+    return [code for lower_bound, code in _EMPLOYEE_THRESHOLDS if lower_bound >= min_employees]
 
-INTERMEDIATE_FILES = [FILTERED_CSV, WEBSITES_CSV, VERIFIED_CSV, LIGHTHOUSE_CSV]
 
 # ============================================================================
 # HELPERS
 # ============================================================================
 
-def _python_cmd():
-    """Renvoie le chemin vers l'interpréteur Python adapté à la plateforme."""
+def load_ape_codes(sector_file: str) -> list:
+    """Charge les codes APE depuis un fichier texte.
+
+    Format accepté (une entrée par ligne) :
+        3012Z - Construction de bateaux de plaisance
+        3011Z
+        # commentaires et lignes vides ignorés
+
+    Retourne une liste de codes APE (ex. ['3012Z', '3011Z']).
+    """
+    codes = []
+    with open(sector_file, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            # Extraire le code : tout ce qui précède le premier tiret ou espace
+            code = line.split('-')[0].strip().split()[0]
+            if code:
+                codes.append(code)
+    if not codes:
+        raise ValueError(f"Aucun code APE trouvé dans {sector_file}")
+    return codes
+
+
+def find_default_database() -> str | None:
+    """Cherche automatiquement le fichier CSV source dans DataBase/."""
+    candidates = [
+        'DataBase/annuaire-des-entreprises-etablissements-juridique.csv',
+        'DataBase/StockUniteLegale_utf8.csv',
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    # Fallback : le plus gros CSV présent dans DataBase/
+    csvs = glob.glob('DataBase/*.csv')
+    if csvs:
+        return max(csvs, key=os.path.getsize)
+    return None
+
+
+def _python_cmd() -> str:
+    """Retourne le chemin vers l'interpréteur Python du venv actif."""
     if platform.system() == 'Windows':
         candidates = ['.venv/Scripts/python.exe']
     else:
         candidates = ['.venv_linux/bin/python', '.venv/bin/python']
     for venv in candidates:
         if os.path.exists(venv):
-            # Vérifier que le venv a pandas (proxy pour "environnement fonctionnel")
             check = subprocess.run(
                 [venv, '-c', 'import pandas'],
                 capture_output=True, timeout=10,
@@ -87,84 +115,155 @@ def _python_cmd():
     return sys.executable
 
 
-def clean_results(clean_lighthouse=False):
-    """Supprime les fichiers intermédiaires et, optionnellement, les anciens rapports."""
-    for f in INTERMEDIATE_FILES:
-        if os.path.exists(f):
-            os.remove(f)
-            print(f"  Supprimé : {f}")
-    if os.path.exists(FINAL_REPORT_CSV):
-        os.remove(FINAL_REPORT_CSV)
-        print(f"  Supprimé : {FINAL_REPORT_CSV}")
-    if clean_lighthouse:
-        for f in glob.glob(os.path.join(LIGHTHOUSE_DIR, '*.json')):
-            os.remove(f)
-        print(f"  Nettoyé : {LIGHTHOUSE_DIR}/*.json")
-
-
-def cleanup_intermediates():
-    """Supprime les fichiers intermédiaires en fin de pipeline."""
-    for f in INTERMEDIATE_FILES:
-        if os.path.exists(f):
-            os.remove(f)
-    print("Fichiers intermédiaires supprimés.")
-
 # ============================================================================
 # PIPELINE
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Pipeline de prospection SEO nautisme")
-    parser.add_argument('--no-fresh', action='store_true',
-                        help="Ne pas nettoyer les anciens résultats avant exécution")
-    parser.add_argument('--limit', type=int, default=None,
-                        help="Limiter le nombre d'entreprises traitées (pour les tests)")
-    parser.add_argument('--skip-lighthouse', action='store_true',
-                        help="Passer l'étape Lighthouse (utile pour les tests)")
-    parser.add_argument('--keep-intermediates', action='store_true',
-                        help="Conserver les fichiers intermédiaires")
+    parser = argparse.ArgumentParser(
+        description="Pipeline de prospection SEO – multi-secteur universel",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemples :
+  python Scripts/run_full_pipeline.py --sector Sectors/nautisme.txt
+  python Scripts/run_full_pipeline.py --sector Sectors/architectes.txt --limit 100
+  python Scripts/run_full_pipeline.py --codes 3012Z,3011Z --name nautisme
+  python Scripts/run_full_pipeline.py --sector Sectors/restaurants.txt --min-employees 1
+  python Scripts/run_full_pipeline.py --sector Sectors/nautisme.txt --no-fresh --skip-audit
+        """,
+    )
+
+    # --- Source des codes APE (obligatoire, l'un ou l'autre) ---
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '--sector', type=str, metavar='FICHIER',
+        help="Fichier .txt avec les codes APE (ex: Sectors/nautisme.txt)",
+    )
+    group.add_argument(
+        '--codes', type=str, metavar='CODE1,CODE2,...',
+        help="Codes APE séparés par virgule (ex: 3012Z,3011Z,3315Z)",
+    )
+
+    # --- Configuration ---
+    parser.add_argument(
+        '--name', type=str, default=None,
+        help="Nom du secteur pour le dossier résultats (défaut: nom du fichier sector)",
+    )
+    parser.add_argument(
+        '--db', type=str, default=None, metavar='FICHIER',
+        help="Chemin vers le CSV source INSEE (auto-détecté dans DataBase/ si absent)",
+    )
+    parser.add_argument(
+        '--min-employees', type=int, default=10, metavar='N',
+        help="Nombre minimum de salariés à cibler (défaut: 10)",
+    )
+
+    # --- Options pipeline ---
+    parser.add_argument(
+        '--no-fresh', action='store_true',
+        help="Ne pas supprimer les anciens résultats avant l'exécution",
+    )
+    parser.add_argument(
+        '--limit', type=int, default=None,
+        help="Limiter le nombre d'entreprises traitées (pour les tests)",
+    )
+    parser.add_argument(
+        '--skip-audit', action='store_true',
+        help="Passer l'étape Audit SEO (étape 4)",
+    )
+    parser.add_argument(
+        '--keep-intermediates', action='store_true',
+        help="Conserver les fichiers intermédiaires après le pipeline",
+    )
+
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("  PIPELINE DE PROSPECTION SEO — NAUTISME")
-    print("=" * 60)
+    # --- Résoudre les codes APE ---
+    if args.sector:
+        if not os.path.exists(args.sector):
+            print(f"Erreur : fichier secteur introuvable → {args.sector}")
+            sys.exit(1)
+        try:
+            naf_codes = load_ape_codes(args.sector)
+        except ValueError as e:
+            print(f"Erreur : {e}")
+            sys.exit(1)
+        sector_name = args.name or os.path.splitext(os.path.basename(args.sector))[0]
+    else:
+        naf_codes = [c.strip() for c in args.codes.split(',') if c.strip()]
+        if not naf_codes:
+            print("Erreur : aucun code APE valide dans --codes.")
+            sys.exit(1)
+        sector_name = args.name or 'secteur'
 
-    # --- Vérification du fichier source ---
-    if not os.path.exists(BASE_CSV):
-        print(f"\nErreur : fichier source introuvable → {BASE_CSV}")
+    # --- Résoudre la base de données ---
+    base_csv = args.db or find_default_database()
+    if not base_csv or not os.path.exists(base_csv):
+        print("Erreur : base de données INSEE introuvable.")
+        print("  Placez le fichier dans DataBase/ ou utilisez --db pour le spécifier.")
         sys.exit(1)
 
-    # --- Création des répertoires ---
-    os.makedirs('Results', exist_ok=True)
-    os.makedirs(LIGHTHOUSE_DIR, exist_ok=True)
+    # --- Codes tranche d'effectifs ---
+    employee_codes = get_employee_codes(args.min_employees)
+    if not employee_codes:
+        print(f"Erreur : aucun code d'effectifs pour min-employees={args.min_employees}.")
+        sys.exit(1)
+
+    # --- Chemins de sortie (isolés par secteur) ---
+    output_dir = f'Results/{sector_name}'
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs('Reports/Lighthouse', exist_ok=True)
+
+    filtered_csv     = f'{output_dir}/filtered_companies.csv'
+    websites_csv     = f'{output_dir}/filtered_companies_websites.csv'
+    verified_csv     = f'{output_dir}/verified_websites.csv'
+    seo_audit_csv    = f'{output_dir}/seo_audit.csv'
+    final_report_csv = f'{output_dir}/final_prospect_report.csv'
+
+    intermediate_files = [filtered_csv, websites_csv, verified_csv, seo_audit_csv]
+
+    # --- Affichage de la configuration ---
+    print("=" * 60)
+    print(f"  PIPELINE DE PROSPECTION SEO — {sector_name.upper()}")
+    print("=" * 60)
+    print(f"  Base de données  : {base_csv}")
+    print(f"  Codes APE ({len(naf_codes)})    : {', '.join(naf_codes)}")
+    print(f"  Min. salariés    : {args.min_employees}+")
+    print(f"  Dossier résultats: {output_dir}/")
+    print("=" * 60)
 
     # --- Nettoyage (fresh start) ---
     if not args.no_fresh:
         print("\n[0] Nettoyage des anciens résultats...")
-        clean_results(clean_lighthouse=False)
+        for f in intermediate_files + [final_report_csv]:
+            if os.path.exists(f):
+                os.remove(f)
+                print(f"  Supprimé : {f}")
 
     # ------------------------------------------------------------------
     # Étape 1 : Filtrage NAF + effectifs
     # ------------------------------------------------------------------
-    print("\n[1/5] Filtrage des entreprises (NAF nautisme + effectifs)...")
+    print(f"\n[1/5] Filtrage des entreprises ({len(naf_codes)} codes APE, {args.min_employees}+ salariés)...")
     filter_companies_by_employees(
-        BASE_CSV,
-        FILTERED_CSV,
-        naf_codes=NAF_CODES_NAUTISME,
-        employee_codes=EMPLOYEE_CODES,
+        base_csv,
+        filtered_csv,
+        naf_codes=naf_codes,
+        employee_codes=employee_codes,
     )
 
     # ------------------------------------------------------------------
     # Étape 2 : Recherche de sites web (Selenium / DuckDuckGo)
     # ------------------------------------------------------------------
-    print("\n[2/5] Recherche de sites web...")
+    print("\n[2/5] Recherche de sites web (Selenium / DuckDuckGo)...")
 
-    # Supprimer le fichier output pour éviter le mode resume
-    if os.path.exists(WEBSITES_CSV):
-        os.remove(WEBSITES_CSV)
+    if os.path.exists(websites_csv):
+        os.remove(websites_csv)
 
     python_cmd = _python_cmd()
-    find_cmd = [python_cmd, 'Scripts/find_websites.py', FILTERED_CSV, '--output_dir', 'Results']
+    find_cmd = [
+        python_cmd, 'Scripts/find_websites.py',
+        filtered_csv, '--output_dir', output_dir,
+    ]
     if args.limit:
         find_cmd += ['--limit', str(args.limit)]
 
@@ -174,53 +273,54 @@ def main():
         print("Erreur lors de la recherche de sites web.")
         sys.exit(1)
 
-    if not os.path.exists(WEBSITES_CSV):
-        print(f"Erreur : fichier attendu introuvable → {WEBSITES_CSV}")
+    if not os.path.exists(websites_csv):
+        print(f"Erreur : fichier attendu introuvable → {websites_csv}")
         sys.exit(1)
 
     # ------------------------------------------------------------------
     # Étape 3 : Vérification des sites par domaine
     # ------------------------------------------------------------------
     print("\n[3/5] Vérification des sites par domaine...")
-    verify_websites_by_domain(WEBSITES_CSV, VERIFIED_CSV)
+    verify_websites_by_domain(websites_csv, verified_csv)
 
     # ------------------------------------------------------------------
-    # Étape 4 : Audits Lighthouse
+    # Étape 4 : Audit SEO (crawl léger)
     # ------------------------------------------------------------------
-    if not args.skip_lighthouse:
-        print("\n[4/5] Audits Lighthouse...")
-        run_lighthouse_reports(VERIFIED_CSV, LIGHTHOUSE_CSV, reports_dir=LIGHTHOUSE_DIR)
+    if not args.skip_audit:
+        print("\n[4/5] Audit SEO (crawl léger)...")
+        run_seo_audit(verified_csv, seo_audit_csv, max_pages=30)
     else:
-        print("\n[4/5] Audits Lighthouse — IGNORÉ (--skip-lighthouse)")
-        # Copier verified → lighthouse pour que l'étape 5 fonctionne
+        print("\n[4/5] Audit SEO — IGNORÉ (--skip-audit)")
         import shutil
-        shutil.copy2(VERIFIED_CSV, LIGHTHOUSE_CSV)
+        shutil.copy2(verified_csv, seo_audit_csv)
 
     # ------------------------------------------------------------------
-    # Étape 5 : Scoring de prospection
+    # Étape 5 : Scoring de prospection v2
     # ------------------------------------------------------------------
-    print("\n[5/5] Scoring de prospection...")
-    create_prospect_scoring(LIGHTHOUSE_CSV, FINAL_REPORT_CSV)
+    print("\n[5/5] Scoring de prospection v2...")
+    create_prospect_scoring_v2(seo_audit_csv, final_report_csv)
 
     # --- Nettoyage des fichiers intermédiaires ---
     if not args.keep_intermediates:
         print("\nNettoyage des fichiers intermédiaires...")
-        cleanup_intermediates()
+        for f in intermediate_files:
+            if os.path.exists(f):
+                os.remove(f)
+        print("Fichiers intermédiaires supprimés.")
 
-    # --- Résumé ---
+    # --- Résumé final ---
     print("\n" + "=" * 60)
     print("  PIPELINE TERMINÉ")
     print("=" * 60)
-    if os.path.exists(FINAL_REPORT_CSV):
+    if os.path.exists(final_report_csv):
         import pandas as pd
-        df = pd.read_csv(FINAL_REPORT_CSV)
-        print(f"  Rapport final : {FINAL_REPORT_CSV}")
-        print(f"  Nombre de prospects : {len(df)}")
-        scored = df[df['prospect_score'] > 0]
+        df = pd.read_csv(final_report_csv)
+        print(f"  Rapport final    : {final_report_csv}")
+        print(f"  Prospects totaux : {len(df)}")
+        scored = df[df['score'] > 0]
         if not scored.empty:
-            print(f"  Prospects avec score : {len(scored)}")
-            print(f"  Score moyen : {scored['prospect_score'].mean():.1f}/10")
-    print(f"  Rapports Lighthouse : {LIGHTHOUSE_DIR}/")
+            print(f"  Avec score       : {len(scored)}")
+            print(f"  Score moyen      : {scored['score'].mean():.1f}/10")
     print()
 
 
