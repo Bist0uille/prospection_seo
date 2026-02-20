@@ -1,0 +1,15 @@
+# Secteur : [NOM DU SECTEUR]
+# Source : INSEE NAF rév. 2
+# Usage  : python Scripts/run_full_pipeline.py --sector Sectors/template.txt --name mon_secteur
+#
+# Format : CODE_APE - Description (la description est optionnelle)
+# Une ligne par code. Les lignes commençant par # sont ignorées.
+#
+# Trouver les codes APE sur :
+#   https://www.insee.fr/fr/statistiques/fichier/2028155/naf2008-liste-n5.pdf
+#   https://www.societe.com/cgi-bin/search/fast.cgi  (recherche par activité)
+#
+# Exemple :
+# 6201Z - Programmation informatique
+# 6202A - Conseil en systèmes et logiciels informatiques
+# 6311Z - Traitement de données, hébergement et activités connexes

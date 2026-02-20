@@ -1,0 +1,6 @@
+# Secteur : Architecture
+# Source : INSEE NAF rév. 2
+# Usage  : python Scripts/run_full_pipeline.py --sector Sectors/architectes.txt --min-employees 1
+
+7111Z - Activités d'architecture
+7112B - Ingénierie et études techniques (bureaux d'architecture technique)

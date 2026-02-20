@@ -1,0 +1,9 @@
+# Secteur : Immobilier
+# Source : INSEE NAF rév. 2
+# Usage  : python Scripts/run_full_pipeline.py --sector Sectors/immobilier.txt
+
+6810Z - Activités des marchands de biens immobiliers
+6820A - Location de logements
+6820B - Location de terrains et d'autres biens immobiliers
+6831Z - Agences immobilières
+6832A - Administration d'immeubles et autres biens immobiliers

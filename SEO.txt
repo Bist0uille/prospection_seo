@@ -1,0 +1,221 @@
+Parfait. Voici des métriques SEO simples, automatisables et commercialement utiles que tu peux intégrer sans dépendre d’API coûteuses.
+
+L’objectif : produire un rapport que les agences peuvent utiliser immédiatement pour pitcher un prospect.
+
+On ne cherche pas un audit SEO expert, mais des signaux business évidents.
+
+✅ 1. Détection de la taille réelle du site
+
+Pourquoi c’est puissant :
+La majorité des PME ont des structures SEO faibles ou incohérentes.
+
+Mesures faciles :
+
+Nombre total de pages HTML détectées
+
+Nombre de pages indexables
+
+Profondeur moyenne des pages (clic depth)
+
+Présence sitemap.xml
+
+Comment faire :
+
+Crawler basique → récupérer tous les <a href> internes.
+
+Même un crawler très simple donne déjà une énorme valeur.
+
+✅ 2. Présence (ou absence) d’un blog
+
+Très vendeur pour les agences.
+
+Détection simple :
+
+Chercher des patterns classiques :
+
+/blog
+
+/actualites
+
+/news
+
+/articles
+
+/category
+
+/tag
+
+OU analyser la structure :
+
+👉 beaucoup d’URLs datées → quasi sûr = blog
+
+Signal business :
+
+✔ Blog absent → opportunité SEO
+✔ Blog présent mais mort → encore mieux pour vendre
+
+✅ 3. Activité du site (ultra pertinent)
+
+Mesure extrêmement parlante pour un commercial.
+
+Méthode simple :
+
+Extraire dates visibles sur pages :
+
+schema.org Article
+
+timestamps
+
+URLs contenant années (/2023/, /2024/)
+
+balises <time>
+
+Classification possible :
+
+Actif (contenu < 6 mois)
+
+Semi-actif
+
+Abandonné (> 2 ans)
+
+Les agences adorent ce genre d’info.
+
+✅ 4. Problèmes SEO majeurs (faciles à détecter)
+
+Pas besoin d’algorithme complexe.
+
+Tu peux mesurer :
+
+✔ Titles
+
+Pages sans <title>
+
+Titles dupliqués
+
+Titles trop courts (< 20 caractères)
+
+✔ Meta description
+
+Absente
+
+Dupliquée
+
+✔ H1
+
+Absente
+
+Multiple (souvent erreur)
+
+✔ Canonical
+
+Absente
+
+Incorrecte
+
+Ces points sont directement exploitables en vente.
+
+✅ 5. Indexabilité réelle
+
+Simple mais très crédible.
+
+Vérifier :
+
+meta robots noindex
+
+X-Robots-Tag
+
+robots.txt bloquant
+
+canonical vers autre domaine
+
+Souvent des surprises ici.
+
+✅ 6. Poids SEO du contenu (signal rapide)
+
+Pas du vrai SEO, mais bon indicateur :
+
+Nombre moyen de mots par page
+
+Pages quasi vides
+
+Ratio texte / HTML
+
+Les sites vitrines ont souvent des pages très pauvres.
+
+✅ 7. Détection des technologies du site
+
+Très utile pour agences :
+
+WordPress
+
+Wix
+
+Shopify
+
+Prestashop
+
+Webflow
+
+Facile via signatures HTML / JS / chemins.
+
+Pourquoi c’est commercialement fort :
+
+Une agence spécialisée Shopify / WP cible différemment.
+
+🚀 Format de rapport très vendeur
+
+Une agence ne veut PAS un truc technique indigeste.
+
+Elle veut :
+
+Entreprise : Dupont Couverture
+Ville : Créon
+CMS : WordPress
+
+Structure :
+
+18 pages détectées
+
+Blog : absent
+
+Sitemap : absent
+
+SEO Technique :
+
+6 pages sans meta description
+
+3 titles dupliqués
+
+4 pages sans H1
+
+Activité :
+
+Dernier contenu détecté : 2021 → Site probablement abandonné
+
+Performance :
+
+Lighthouse mobile : 32
+
+Opportunité commerciale :
+“Site lent + aucun contenu récent → potentiel SEO & conversion élevé”
+
+👉 Ça, c’est de la donnée que les agences peuvent vendre DIRECTEMENT.
+
+⚠️ Important : pourquoi c’est mieux que Lighthouse SEO
+
+Parce que :
+
+✔ Tu montres des problèmes réels
+✔ Tu montres un manque à gagner
+✔ Tu aides la prospection
+✔ Tu ne dépends pas des fantasmes du score 100
+
+🎯 Si tu veux aller plus loin ensuite
+
+Les ajouts à très fort ROI :
+
+Détection pages indexées via opérateur site: (sans scraping massif)
+
+Détection backlinks (plus compliqué sans API)
+
+Détection présence Google Business Profile

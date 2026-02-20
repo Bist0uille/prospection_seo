@@ -83,13 +83,44 @@ def _get_wsl_chromedriver(chrome_version):
     return driver_path
 
 DIRECTORY_DOMAINS = {
-    'societe.com', 'pagesjaunes.fr', 'pappers.fr', 
-    'annuaire-entreprises.data.gouv.fr', 'verif.com', 
+    'societe.com', 'pagesjaunes.fr', 'pappers.fr',
+    'annuaire-entreprises.data.gouv.fr', 'verif.com',
     'entreprises.lefigaro.fr', 'fr.kompass.com', 'facebook.com',
     'linkedin.com', 'youtube.com', 'wikipedia.org', 'doctrine.fr',
     'app.dataprospects.fr', 'service-de-reparation-de-bateaux.autour-de-moi.com',
     'entreprises.lagazettefrance.fr', 'reseauexcellence.fr', 'actunautique.com'
 }
+
+def _is_not_french_url(url: str) -> bool:
+    """Retourne True si l'URL est clairement non-française (à rejeter).
+
+    Rejette :
+    - les chemins en version anglaise : /en/, /en-gb/, etc.
+    - les TLD canadiens : .ca
+    """
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower().replace('www.', '')
+        path = parsed.path.lower()
+        if re.search(r'/(en|en-[a-z]{2})(/|$)', path):
+            return True
+        if domain.endswith('.ca'):
+            return True
+        return False
+    except Exception:
+        return False
+
+def _tld_priority(url: str) -> int:
+    """Priorité de TLD pour trier les candidats. Valeur basse = meilleur.
+
+    .fr  → 0  (priorité maximale, site clairement français)
+    autres → 1
+    """
+    try:
+        domain = urlparse(url).netloc.lower().replace('www.', '')
+        return 0 if domain.endswith('.fr') else 1
+    except Exception:
+        return 1
 
 def get_website_with_selenium(denomination: str):
     """
@@ -133,8 +164,13 @@ def get_website_with_selenium(denomination: str):
             return 'NON TROUVÉ', None, None
 
         stop_words = {'sa', 'sas', 'sarl', 'eurl', 'snc', 'ste', 'et', 'de', 'la', 'les', 'des'}
-        
-        for rank, result in enumerate(results[:3], 1): 
+
+        # Collecte tous les candidats valides parmi les 5 premiers résultats,
+        # puis choisit le meilleur en préférant les TLD .fr aux autres.
+        candidates = []  # liste de (tld_priority, rank, url)
+        keywords = [word for word in re.split(r'[\s-]+', denomination) if word.lower() not in stop_words and len(word) > 2]
+
+        for rank, result in enumerate(results[:5], 1):
             url = result.get_attribute('href')
             if not url:
                 continue
@@ -146,23 +182,32 @@ def get_website_with_selenium(denomination: str):
             if domain in DIRECTORY_DOMAINS:
                 logging.warning(f"URL is a known directory: {domain}. Skipping.")
                 continue
-            
-            # New Keyword Validation Logic
-            keywords = [word for word in re.split(r'[\s-]+', denomination) if word.lower() not in stop_words and len(word) > 2]
+
+            if _is_not_french_url(url):
+                logging.warning(f"URL {url} rejetée (non-française : chemin /en/ ou TLD .ca).")
+                continue
+
             is_match_found = False
             for keyword in keywords:
                 normalized_keyword = normalize_name(keyword)
                 if normalized_keyword and normalized_keyword in cleaned_domain:
-                    logging.info(f"Keyword '{normalized_keyword}' from '{denomination}' found in domain '{domain}'. Valid URL.")
+                    logging.info(f"Keyword '{normalized_keyword}' from '{denomination}' found in domain '{domain}'.")
                     is_match_found = True
-                    break # Found a match, no need to check other keywords
-            
+                    break
+
             if is_match_found:
-                return 'TROUVÉ', url, rank
+                candidates.append((_tld_priority(url), rank, url))
             else:
                 logging.info(f"URL {url} does not match any keyword from '{denomination}'. Skipping.")
 
-        logging.warning("No valid URL found after checking top 3 results.")
+        if candidates:
+            # Tri : d'abord par priorité TLD (.fr=0 avant les autres=1), puis par rang DDG
+            candidates.sort(key=lambda x: (x[0], x[1]))
+            best_priority, best_rank, best_url = candidates[0]
+            logging.info(f"Meilleur candidat retenu : {best_url} (TLD priority={best_priority}, rank={best_rank})")
+            return 'TROUVÉ', best_url, best_rank
+
+        logging.warning("No valid French URL found after checking top 5 results.")
         return 'NON TROUVÉ', None, None
 
     except Exception as e:
