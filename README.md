@@ -1,118 +1,178 @@
-# Prospection SEO Nautisme
+# Prospection SEO — Outil multi-secteur
 
-Outil de prospection commerciale automatisé ciblant le secteur nautique français. Le pipeline identifie les entreprises du secteur, trouve leurs sites web, audite leur qualité via Google Lighthouse, et génère un rapport de scoring : plus le site est mal optimisé, plus l'entreprise est un prospect intéressant pour des services web.
+Outil de prospection commerciale automatisé pour **agences web françaises**. Le pipeline identifie les entreprises d'un secteur donné, trouve leurs sites web, audite leur qualité par crawl léger, et génère un rapport de scoring : plus le site est mal optimisé / abandonné, plus l'entreprise est un prospect prioritaire.
 
 ## Pipeline
 
-Le pipeline complet s'exécute en **5 étapes** via un seul script :
-
 ```bash
-python Scripts/run_full_pipeline.py
+# Par fichier secteur
+python Scripts/run_full_pipeline.py --sector Sectors/nautisme.txt
+
+# Par codes NAF directs
+python Scripts/run_full_pipeline.py --codes 3012Z,3011Z,3315Z --name nautisme
+
+# Avec limites
+python Scripts/run_full_pipeline.py --sector Sectors/restaurants.txt --limit 50 --min-employees 1
 ```
 
-| Étape | Description | Détail |
-|-------|-------------|--------|
-| 1 | **Filtrage** | Filtre la base INSEE par codes NAF nautisme (10 codes), tranche d'effectifs (10+ salariés), statut actif, et déduplique par SIREN |
-| 2 | **Recherche de sites** | Recherche DuckDuckGo automatisée via Selenium headless, validation par correspondance nom/domaine, exclusion des annuaires |
-| 3 | **Vérification** | Vérifie chaque site trouvé par matching domaine/nom d'entreprise, avec blocklist de faux positifs |
-| 4 | **Audit Lighthouse** | Exécute `npx lighthouse` sur chaque site vérifié, génère un rapport JSON par entreprise |
-| 5 | **Scoring** | Calcule un score de prospect (1-10) à partir des scores Lighthouse, trie par potentiel décroissant |
+| Étape | Script | Description |
+|-------|--------|-------------|
+| 1 | `prospect_analyzer.py` | Filtre la base INSEE par codes NAF, tranche d'effectifs, statut actif, déduplique par SIREN |
+| 2 | `find_websites.py` | Recherche DuckDuckGo via Selenium headless, validation nom/domaine, exclusion annuaires |
+| 3 | `prospect_analyzer.py` | Vérifie chaque site (matching domaine, blocklist, filtre sites non-français) |
+| 4 | `seo_auditor.py` | Crawl BFS léger (max 30 pages), extraction signaux SEO business |
+| 5 | `prospect_analyzer.py` | Scoring d'opportunité business (1–10), rapport CSV final |
+
+Les résultats sont isolés par secteur dans `Results/{secteur}/`.
 
 ### Options CLI
 
 ```
---no-fresh            Ne pas nettoyer les anciens résultats avant exécution
---limit N             Limiter le nombre d'entreprises (pour les tests)
---skip-lighthouse     Passer l'étape Lighthouse
---keep-intermediates  Conserver les fichiers intermédiaires
+--sector FILE         Fichier .txt de codes APE (voir Sectors/)
+--codes A,B,C         Codes NAF directs (ex. 3012Z,3011Z)
+--name NOM            Nom du secteur pour le dossier de résultats
+--limit N             Limiter le nombre d'entreprises (tests)
+--min-employees N     Effectif minimum (défaut : 10)
 ```
 
-## Codes NAF ciblés
+## Secteurs disponibles
 
-| Code | Activité |
-|------|----------|
-| 3012Z | Construction de bateaux de plaisance |
-| 3011Z | Construction de navires et structures flottantes |
-| 3315Z | Réparation et maintenance navale |
-| 5010Z | Transports maritimes et côtiers de passagers |
-| 5020Z | Transports maritimes et côtiers de fret |
-| 5222Z | Services auxiliaires des transports par eau |
-| 7734Z | Location de matériels de transport par eau |
-| 7721Z | Location d'articles de loisirs (bateaux plaisance) |
-| 4764Z | Commerce de détail d'articles de sport (accastillage) |
-| 9329Z | Activités récréatives (marinas) |
-
-Les codes et tranches d'effectifs sont configurables en tête de `Scripts/run_full_pipeline.py`.
-
-## Formule de scoring
+Les secteurs sont définis dans `Sectors/` — un fichier `.txt` par secteur, un code APE par ligne :
 
 ```
-prospect_score = ((1 - seo) * 1.5 + (1 - perf) * 1.2 + (1 - acc) * 0.8) / 3.5 * 10
+3012Z - Construction de bateaux de plaisance
+3011Z - Construction de navires et structures flottantes
+# les commentaires sont ignorés
 ```
 
-- **Score 8-10** : site de mauvaise qualité = excellent prospect
-- **Score 4-7** : prospect modéré, améliorations possibles
-- **Score 1-3** : site bien optimisé = prospect faible
+Secteurs inclus : `nautisme`, `architectes`, `immobilier`, `restaurants`.
+Copier `Sectors/template.txt` pour créer un nouveau secteur.
+
+## Filtrage des sites non-français
+
+Le pipeline rejette automatiquement :
+- Les URLs avec `/en/` dans le chemin (versions anglaises de sites .eu)
+- Les TLD `.ca` (sites canadiens/québécois)
+- En cas de plusieurs candidats valides, les domaines `.fr` sont préférés aux `.com` / `.eu`
+
+## Audit SEO (seo_auditor.py)
+
+Crawl BFS sans Selenium — rapide et stable. Signaux extraits par site :
+
+| Signal | Description |
+|--------|-------------|
+| `nb_pages` | Nombre de pages crawlées |
+| `has_sitemap` | Présence de sitemap.xml |
+| `has_blog` | Blog détecté (URL patterns → liens → nav vérifiée) |
+| `blog_status` | `actif` / `semi-actif` / `abandonné` / `présent` / `absent` |
+| `derniere_maj_blog` | Date du dernier article détecté |
+| `frequence_publication` | `hebdomadaire` / `mensuelle` / `trimestrielle` / `rare` |
+| `activite_status` | Basé sur les dates blog (fiable) ou all_dates (plafonné à semi-actif) |
+| `cms_detecte` | WordPress, Wix, Shopify, Squarespace, Webflow, Joomla, Drupal |
+| `mots_moyen_par_page` | Densité de contenu |
+| `ratio_texte_html` | Ratio texte visible / HTML brut |
+| `titles_dupliques` | Ratio 0.0–1.0 de titles en doublon |
+| `pages_sans_meta_desc` | Nombre de pages sans meta description |
+| `pages_sans_h1` | Nombre de pages sans H1 |
+| `pages_vides` | Pages < 50 mots (hors /contact, /cgv, /mentions-legales…) |
+
+> Un site sans blog ne peut jamais être déclaré "actif" — les dates globales (footers, CGU) ne sont pas fiables pour juger l'activité réelle.
+
+## Scoring d'opportunité business
+
+Score de 1 à 10 mesurant la **probabilité de deal**, pas la qualité SEO académique.
+
+### Signaux positifs
+
+| Signal | Points |
+|--------|--------|
+| Blog abandonné | +5 |
+| Blog semi-actif | +2 |
+| Pas de blog (site vitrine souvent obsolète) | +1 |
+| nb_pages < 5 | +3 |
+| nb_pages 5–9 | +1 |
+| mots_moyen_par_page < 150 | +2 |
+| ratio_texte_html < 0.15 | +2 |
+| CMS non détecté (site bricolé) | +2 |
+| CMS Wix ou Squarespace | +1 |
+| Pas de sitemap | +1 |
+| Pages sans meta desc (par tranche de 20 %) | +0.5 |
+| Pages sans H1 (par tranche de 20 %) | +0.5 |
+| Titles dupliqués > 30 % | +0.5 |
+| Pages vides (par tranche de 20 %) | +0.5 |
+
+### Signaux négatifs
+
+| Signal | Points |
+|--------|--------|
+| Blog actif + publication hebdo/mensuelle | −4 |
+| nb_pages > 50 | −3 |
+| mots_moyen_par_page > 400 | −2 |
 
 ## Structure du projet
 
 ```
 ├── Scripts/
-│   ├── run_full_pipeline.py      # Pipeline principal (point d'entrée)
-│   ├── prospect_analyzer.py      # Filtrage, vérification, Lighthouse, scoring
-│   └── find_websites.py          # Recherche de sites via Selenium/DuckDuckGo
+│   ├── run_full_pipeline.py      # Point d'entrée — pipeline multi-secteur
+│   ├── find_websites.py          # Recherche sites web via Selenium/DuckDuckGo
+│   ├── seo_auditor.py            # Audit SEO par crawl BFS léger
+│   ├── prospect_analyzer.py      # Filtrage, vérification, scoring
+│   └── botparser_log.py          # Utilitaires de logging
+│
+├── Sectors/
+│   ├── nautisme.txt              # Codes APE secteur nautisme
+│   ├── architectes.txt
+│   ├── immobilier.txt
+│   ├── restaurants.txt
+│   └── template.txt              # Modèle pour un nouveau secteur
 │
 ├── DataBase/
-│   └── annuaire-des-entreprises-nouvelle_aquitaine.csv  # Base source
+│   ├── annuaire-des-entreprises-nautisme.csv
+│   └── annuaire-des-entreprises-etablissements-juridique.csv
 │
 ├── Results/
-│   └── final_prospect_report.csv  # Rapport final (seul fichier conservé)
+│   └── {secteur}/
+│       └── final_prospect_report.csv   # Rapport final par secteur
 │
-├── Reports/Lighthouse/
-│   └── {SIREN}_report.json        # Rapports Lighthouse individuels
-│
-├── code_ape_nautisme.txt          # Référence des codes NAF nautisme
 ├── requirements.txt
 └── .gitignore
 ```
 
-Les fichiers intermédiaires (`filtered_companies.csv`, `*_websites.csv`, `verified_websites.csv`, `lighthouse_reports.csv`) sont créés pendant l'exécution et supprimés automatiquement à la fin.
-
 ## Installation
 
 ```bash
-# Cloner le repo
 git clone https://github.com/Bist0uille/prospection_seo.git
 cd prospection_seo
 
-# Créer un environnement virtuel et installer les dépendances
 python -m venv .venv
-source .venv/bin/activate  # Linux/WSL
-# ou .venv\Scripts\activate  # Windows
-pip install -r requirements.txt
+source .venv/bin/activate       # Linux/WSL
+# .venv\Scripts\activate        # Windows
 
-# Installer Lighthouse (nécessite Node.js)
-npm install -g lighthouse
+pip install -r requirements.txt
 ```
 
-Chrome ou Chromium doit être installé. Sur WSL sans Chrome Linux, le script détecte et utilise automatiquement [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) s'il est présent dans `~/.chrome-for-testing/`.
+Chrome ou Chromium doit être installé (utilisé uniquement pour l'étape de recherche de sites). Sur WSL sans Chrome Linux, le script détecte automatiquement [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) s'il est présent dans `~/.chrome-for-testing/`.
 
-## Sortie
+## Rapport final
 
-Le rapport final `Results/final_prospect_report.csv` contient :
+`Results/{secteur}/final_prospect_report.csv` :
 
 | Colonne | Description |
 |---------|-------------|
-| `siren` | Identifiant SIREN |
-| `denominationUniteLegale` | Nom de l'entreprise |
-| `trancheEffectifsUniteLegale` | Code tranche d'effectifs |
-| `site_web` | URL du site trouvé |
-| `prospect_score` | Score de 1 à 10 (plus = meilleur prospect) |
-| `performance` | Score Lighthouse performance (0-100) |
-| `seo` | Score Lighthouse SEO (0-100) |
-| `accessibilite` | Score Lighthouse accessibilité (0-100) |
-| `bonnes_pratiques` | Score Lighthouse bonnes pratiques (0-100) |
-| `prospect_summary` | Résumé textuel du potentiel |
+| `entreprise` | Nom de l'entreprise |
+| `site_web` | URL du site |
+| `score` | Score d'opportunité 1–10 |
+| `cms` | CMS détecté |
+| `nb_pages` | Pages crawlées |
+| `blog` | Présence blog |
+| `blog_url` | URL du blog |
+| `activite` | Statut d'activité |
+| `derniere_maj_site` | Dernière date détectée |
+| `sitemap` | Présence sitemap |
+| `pages_sans_meta_desc` | Pages sans meta description |
+| `pages_sans_h1` | Pages sans H1 |
+| `mots_moy_page` | Mots moyens par page |
+| `resume` | Résumé textuel des opportunités |
 
 ## Considérations légales
 
