@@ -44,6 +44,31 @@ DIRECTORY_DOMAINS: set[str] = {
     "linkedin.com", "youtube.com", "wikipedia.org", "doctrine.fr",
     "app.dataprospects.fr", "service-de-reparation-de-bateaux.autour-de-moi.com",
     "entreprises.lagazettefrance.fr", "reseauexcellence.fr", "actunautique.com",
+    # annuaires locaux / portails ville (ajoutés suite audit secteur nautisme)
+    "autour-de-moi.tel", "autour-de-moi.com",
+    "nous-larochelle.fr", "nous-bordeaux.fr",
+    "investinbordeaux.fr",
+    "portail-nautisme.fr",
+    "bateauavendre.fr",
+    "seapolelarochelle.com",
+}
+
+# Mots trop courants pour valider un match de domaine : ils apparaissent dans
+# des dizaines de domaines non liés à l'entreprise cherchée.
+# Ils restent dans la requête de recherche DDG, mais n'entrent pas dans le matching domaine.
+#
+# NE PAS mettre ici les mots spécifiques au secteur qui peuvent être LE nom
+# de l'entreprise (ex: "marine" pour RC MARINE, "naval" pour NAVAL GROUP).
+_DOMAIN_NOISE_WORDS: set[str] = {
+    # Villes / régions
+    "bordeaux", "larochelle", "nantes", "brest", "toulon", "marseille",
+    "gironde", "charente", "atlantique", "arcachon",
+    # Termes sectoriels trop génériques (apparaissent dans annuaires et portails)
+    "maritime", "nautique", "nautisme", "yachting", "bateau", "bateaux",
+    "port", "mer", "ocean",
+    # Termes corporate génériques
+    "france", "french", "groupe", "group", "services", "service",
+    "industrie", "industries", "invest", "solutions",
 }
 
 _STOP_WORDS: set[str] = {"sa", "sas", "sarl", "eurl", "snc", "ste", "et", "de", "la", "les", "des"}
@@ -137,35 +162,57 @@ def _pick_best_candidate(
     results: list[dict],
     keywords: list[str],
 ) -> tuple[int, int, str] | None:
-    """Filter DDG results and return the best (tld_priority, rank, root_url) or None."""
+    """Filter DDG results and return the best (tld_priority, rank, root_url) or None.
+
+    Matching rules :
+    - ``_DOMAIN_NOISE_WORDS`` (amélioration 2) : mots trop courants exclus du matching
+      (bordeaux, maritime, yachting…). Pas de filtre sur la longueur — les acronymes
+      spécifiques courts (MSC, AMEL, OCEA) sont des identifiants valides.
+    - ``DIRECTORY_DOMAINS`` + pattern ``autour-de-moi`` (amélioration 3) : annuaires
+      bloqués avant le matching.
+    - Si tous les mots du nom sont du bruit, on refuse plutôt qu'accepter n'importe quoi.
+    """
+    # Keywords effectifs : tout sauf les noise words (amélioration 2)
+    active_kws = [
+        kw for kw in keywords
+        if normalize_name(kw) not in _DOMAIN_NOISE_WORDS
+    ]
+    logger.debug("Active matching keywords (non-noise): %s", active_kws)
+
     candidates: list[tuple[int, int, str]] = []
     for rank, result in enumerate(results, 1):
         raw_url = result.get("href", "")
         if not raw_url:
             continue
 
-        # Always normalise to root domain — companies are in France, paths don't matter
+        # Normalise to root domain — companies are in France, paths don't matter
         url = _strip_to_root(raw_url)
         domain = urlparse(url).netloc.replace("www.", "")
         cleaned_domain = domain.replace(".", "").replace("-", "")
         logger.debug("Checking rank %d: %s → root: %s", rank, raw_url, url)
 
+        # amélioration 3 — blocklist étendue
         if domain in DIRECTORY_DOMAINS:
             logger.warning("Skipping known directory domain: %s", domain)
+            continue
+        if "autour-de-moi" in domain:
+            logger.warning("Skipping directory domain (pattern): %s", domain)
             continue
 
         if _is_canadian(url):
             logger.warning("Skipping Canadian domain: %s", domain)
             continue
 
-        matched = any(
-            normalize_name(kw) in cleaned_domain
-            for kw in keywords
-            if normalize_name(kw)
-        )
+        if not active_kws:
+            # Tous les mots sont du bruit — refuser plutôt qu'accepter n'importe quoi
+            logger.debug("No active keywords after noise filter — skipping %s", domain)
+            continue
+
+        matched = any(normalize_name(kw) in cleaned_domain for kw in active_kws)
         if matched:
+            matched_kws = [kw for kw in active_kws if normalize_name(kw) in cleaned_domain]
             candidates.append((_tld_priority(url), rank, url))
-            logger.debug("Keyword match: '%s' in domain '%s'", keywords, domain)
+            logger.debug("Keyword match %s → domain '%s'", matched_kws, domain)
         else:
             logger.debug("No keyword match for domain '%s'", domain)
 
