@@ -22,6 +22,7 @@ from pathlib import Path
 
 import click
 import pandas as pd
+import requests
 from pydantic import ValidationError
 from tqdm import tqdm
 from urllib.parse import urlparse
@@ -152,6 +153,28 @@ def _tld_priority(url: str) -> int:
 # DDGS SEARCH
 # ============================================================================
 
+_VERIFY_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; bot/1.0)"}
+
+
+def _verify_url(url: str, timeout: int = 6) -> bool:
+    """Return True if the URL responds with HTTP < 400.
+
+    Args:
+        url: Root URL to check.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        True if accessible, False otherwise.
+    """
+    try:
+        resp = requests.head(
+            url, timeout=timeout, allow_redirects=True, headers=_VERIFY_HEADERS
+        )
+        return resp.status_code < 400
+    except Exception:
+        return False
+
+
 def _ddgs_search(query: str, max_results: int = 5) -> list[dict]:
     """Run a DDG text search and return results list."""
     from ddgs import DDGS
@@ -161,8 +184,10 @@ def _ddgs_search(query: str, max_results: int = 5) -> list[dict]:
 def _pick_best_candidate(
     results: list[dict],
     keywords: list[str],
-) -> tuple[int, int, str] | None:
-    """Filter DDG results and return the best (tld_priority, rank, root_url) or None.
+) -> list[tuple[int, int, str]]:
+    """Filter DDG results and return sorted candidates [(tld_priority, rank, root_url)].
+
+    Returns an empty list if no candidate matches.
 
     Matching rules :
     - ``_DOMAIN_NOISE_WORDS`` (amélioration 2) : mots trop courants exclus du matching
@@ -216,18 +241,18 @@ def _pick_best_candidate(
         else:
             logger.debug("No keyword match for domain '%s'", domain)
 
-    if not candidates:
-        return None
     candidates.sort(key=lambda x: (x[0], x[1]))
-    return candidates[0]
+    return candidates
 
 
 def get_website_with_ddgs(denomination: str) -> tuple[str, str | None, int | None]:
     """Search DuckDuckGo for a company website via the ddgs API (no browser).
 
     Strategy:
-    1. Search ``<denomination> fr`` — pick best root-domain match.
-    2. If no match, retry with ``<denomination> nautisme`` as fallback.
+    1. Search ``<denomination> fr`` — build ranked candidate list.
+    2. If no candidates, retry with ``<denomination> nautisme`` as fallback.
+    3. For each candidate (best TLD/rank first), verify it responds (HTTP < 400).
+       The first accessible URL wins.
 
     The URL is always normalised to the root domain (scheme + host) so that
     paths like ``/en/`` are stripped — all targeted companies are in France.
@@ -237,8 +262,8 @@ def get_website_with_ddgs(denomination: str) -> tuple[str, str | None, int | Non
 
     Returns:
         Tuple ``(status, url, rank)`` where status is one of:
-            - ``'TROUVÉ'``     — a matching URL was found
-            - ``'NON TROUVÉ'`` — no match after both searches
+            - ``'TROUVÉ'``     — a matching URL was found and verified
+            - ``'NON TROUVÉ'`` — no accessible match after both searches
             - ``'ERREUR'``     — ddgs raised an exception
     """
     logger.info("Searching for: '%s'", denomination)
@@ -251,22 +276,24 @@ def get_website_with_ddgs(denomination: str) -> tuple[str, str | None, int | Non
         # ── Pass 1 : "<denomination> fr" ────────────────────────────────────
         results = _ddgs_search(f"{denomination} fr", max_results=5)
         logger.debug("Pass 1 — %d results", len(results))
-        best = _pick_best_candidate(results, keywords)
+        candidates = _pick_best_candidate(results, keywords)
 
         # ── Pass 2 : fallback with "nautisme" ────────────────────────────────
-        if best is None:
+        if not candidates:
             logger.info("No match in pass 1 — retrying with 'nautisme' keyword.")
             results2 = _ddgs_search(f"{denomination} nautisme", max_results=5)
             logger.debug("Pass 2 — %d results", len(results2))
-            best = _pick_best_candidate(results2, keywords)
+            candidates = _pick_best_candidate(results2, keywords)
 
-        if best is not None:
-            best_priority, best_rank, best_url = best
-            logger.info(
-                "Best match for '%s': %s (TLD priority=%d, rank=%d)",
-                denomination, best_url, best_priority, best_rank,
-            )
-            return "TROUVÉ", best_url, best_rank
+        # ── Verify accessibility (first accessible candidate wins) ────────────
+        for best_priority, best_rank, best_url in candidates:
+            if _verify_url(best_url):
+                logger.info(
+                    "Best match for '%s': %s (TLD priority=%d, rank=%d)",
+                    denomination, best_url, best_priority, best_rank,
+                )
+                return "TROUVÉ", best_url, best_rank
+            logger.warning("URL not accessible, skipping: %s", best_url)
 
         logger.warning("No match found for '%s' after both search passes.", denomination)
         return "NON TROUVÉ", None, None

@@ -414,6 +414,8 @@ def audit_site(url: str, max_pages: int = 30) -> dict:
         "mots_moyen_par_page": 0, "pages_vides": 0, "ratio_texte_html": 0.0,
         # Technology
         "cms_detecte": None,
+        # Language
+        "langue_site": None,
         # Error
         "audit_erreur": None,
     }
@@ -473,6 +475,17 @@ def audit_site(url: str, max_pages: int = 30) -> dict:
         # ── CMS detection (first page or until found) ─────────────────────────
         if cms_detected is None:
             cms_detected = _detect_cms(html)
+
+        # ── Language detection (first page only) ──────────────────────────────
+        if pages_crawled == 1:
+            html_tag = soup.find("html")
+            if html_tag and html_tag.get("lang"):
+                result["langue_site"] = html_tag["lang"].lower()
+                if result["langue_site"].startswith("en"):
+                    logger.warning(
+                        "  Site language is '%s' (English) — not a French site: %s",
+                        result["langue_site"], url,
+                    )
 
         # ── Title ─────────────────────────────────────────────────────────────
         title_tag = soup.find("title")
@@ -706,7 +719,7 @@ def run_seo_audit(
         "pages_sans_canonical",
         "has_robots_txt", "pages_noindex",
         "mots_moyen_par_page", "pages_vides", "ratio_texte_html",
-        "cms_detecte", "audit_erreur",
+        "cms_detecte", "langue_site", "audit_erreur",
     ]
     for col in audit_columns:
         df[col] = None
@@ -727,6 +740,12 @@ def run_seo_audit(
             audit = audit_site(url, max_pages=max_pages)
             for col in audit_columns:
                 df.at[idx, col] = audit.get(col)
+            langue = audit.get("langue_site") or ""
+            if langue.startswith("en"):
+                logger.warning(
+                    "  Excluding '%s' — site language is English (%s).", name, langue
+                )
+                df.at[idx, "site_verifie"] = False
         except Exception as exc:
             logger.error("  Audit error for '%s': %s", url, exc, exc_info=True)
             df.at[idx, "audit_erreur"] = str(exc)
