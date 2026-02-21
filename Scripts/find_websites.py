@@ -1,306 +1,372 @@
+#!/usr/bin/env python3
+"""
+Website discovery via DuckDuckGo search API (ddgs).
 
-import pandas as pd
+For each company in the input CSV, queries the DuckDuckGo API (no browser
+needed), validates the result against the company name (keyword matching),
+and saves a URL when a match is found.
+
+Usage:
+  python Scripts/find_websites.py Results/nautisme/filtered_companies.csv
+  python Scripts/find_websites.py Results/nautisme/filtered_companies.csv --output-dir Results/nautisme
+  python Scripts/find_websites.py Results/nautisme/filtered_companies.csv --limit 20
+"""
+
+from __future__ import annotations
+
+import re
+import sys
 import time
 import random
+from pathlib import Path
+
+import click
+import pandas as pd
+from pydantic import ValidationError
 from tqdm import tqdm
-import re
-import os
-import sys
-import logging
-import argparse
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import urlparse
 
-# --- Helper function for normalization ---
-def normalize_name(name):
-    """Normalise un nom d'entreprise pour la comparaison avec un domaine."""
-    name = name.lower()
-    name = re.sub(r'[^a-z0-9]', '', name)
-    return name
+# ── Project root on sys.path ──────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
-# --- Setup Logging ---
-log_file = 'website_finder.log'
-# Clear log file at the beginning of a full run
-# This logic needs to be careful if run in a pipeline - maybe clear only on explicit start
-# For now, keeping as is, but noting for future
-if not ('--limit' in sys.argv or os.path.exists('websites_selenium_results.csv')):
-    if os.path.exists(log_file):
-        os.remove(log_file)
+from Scripts.core.logging_config import get_logger, setup_pipeline_logging
+from Scripts.core.models import FindWebsitesConfig
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+logger = get_logger(__name__)
 
-def _has_linux_chrome():
-    """Vérifie si un Chrome/Chromium Linux est disponible."""
-    import shutil
-    return any(shutil.which(b) for b in ('google-chrome', 'google-chrome-stable', 'chromium-browser', 'chromium'))
+# ── Constants ─────────────────────────────────────────────────────────────────
 
-def _get_win_chrome_version():
-    """Détecte la version de Chrome Windows depuis le dossier d'installation."""
-    chrome_dir = '/mnt/c/Program Files/Google/Chrome/Application'
-    if os.path.isdir(chrome_dir):
-        for entry in os.listdir(chrome_dir):
-            if entry[0].isdigit() and '.' in entry:
-                return entry  # ex: "144.0.7559.133"
-    return None
-
-def _get_wsl_chromedriver(chrome_version):
-    """Télécharge le chromedriver win64 compatible pour WSL et retourne son chemin."""
-    import zipfile
-    import urllib.request
-
-    # Le .exe doit être sur le filesystem Windows pour s'exécuter depuis WSL
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cache_dir = os.path.join(script_dir, '.chromedriver', chrome_version)
-    driver_path = os.path.join(cache_dir, 'chromedriver.exe')
-    if os.path.exists(driver_path):
-        return driver_path
-
-    os.makedirs(cache_dir, exist_ok=True)
-    url = f'https://storage.googleapis.com/chrome-for-testing-public/{chrome_version}/win64/chromedriver-win64.zip'
-    logging.info(f"Downloading win64 chromedriver from {url}")
-    zip_path = os.path.join(cache_dir, 'chromedriver.zip')
-    urllib.request.urlretrieve(url, zip_path)
-    with zipfile.ZipFile(zip_path, 'r') as zf:
-        for member in zf.namelist():
-            if member.endswith('chromedriver.exe'):
-                with zf.open(member) as src, open(driver_path, 'wb') as dst:
-                    dst.write(src.read())
-                break
-    os.remove(zip_path)
-    os.chmod(driver_path, 0o755)
-    logging.info(f"Chromedriver saved to {driver_path}")
-    return driver_path
-
-DIRECTORY_DOMAINS = {
-    'societe.com', 'pagesjaunes.fr', 'pappers.fr',
-    'annuaire-entreprises.data.gouv.fr', 'verif.com',
-    'entreprises.lefigaro.fr', 'fr.kompass.com', 'facebook.com',
-    'linkedin.com', 'youtube.com', 'wikipedia.org', 'doctrine.fr',
-    'app.dataprospects.fr', 'service-de-reparation-de-bateaux.autour-de-moi.com',
-    'entreprises.lagazettefrance.fr', 'reseauexcellence.fr', 'actunautique.com'
+DIRECTORY_DOMAINS: set[str] = {
+    "societe.com", "pagesjaunes.fr", "pappers.fr",
+    "annuaire-entreprises.data.gouv.fr", "verif.com",
+    "entreprises.lefigaro.fr", "fr.kompass.com", "facebook.com",
+    "linkedin.com", "youtube.com", "wikipedia.org", "doctrine.fr",
+    "app.dataprospects.fr", "service-de-reparation-de-bateaux.autour-de-moi.com",
+    "entreprises.lagazettefrance.fr", "reseauexcellence.fr", "actunautique.com",
 }
 
-def _is_not_french_url(url: str) -> bool:
-    """Retourne True si l'URL est clairement non-française (à rejeter).
+_STOP_WORDS: set[str] = {"sa", "sas", "sarl", "eurl", "snc", "ste", "et", "de", "la", "les", "des"}
 
-    Rejette :
-    - les chemins en version anglaise : /en/, /en-gb/, etc.
-    - les TLD canadiens : .ca
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def normalize_name(name: str) -> str:
+    """Normalise a company name for comparison against a domain.
+
+    Lowercases and removes all non-alphanumeric characters.
+
+    Args:
+        name: Raw company name.
+
+    Returns:
+        Normalised alphanumeric string.
+    """
+    name = name.lower()
+    return re.sub(r"[^a-z0-9]", "", name)
+
+
+def _strip_to_root(url: str) -> str:
+    """Return the root URL (scheme + domain only), stripping any path.
+
+    Examples:
+        https://ap-yachting.fr/en/  →  https://ap-yachting.fr/
+        https://lecamus.fr/notre-entreprise/  →  https://lecamus.fr/
+
+    Args:
+        url: Any URL string.
+
+    Returns:
+        Scheme + netloc with trailing slash.
     """
     try:
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower().replace('www.', '')
-        path = parsed.path.lower()
-        if re.search(r'/(en|en-[a-z]{2})(/|$)', path):
-            return True
-        if domain.endswith('.ca'):
-            return True
-        return False
+        p = urlparse(url)
+        return f"{p.scheme}://{p.netloc}/"
+    except Exception:
+        return url
+
+
+def _is_canadian(url: str) -> bool:
+    """Return True if the URL has a .ca TLD (Canadian domain).
+
+    Args:
+        url: URL to check.
+
+    Returns:
+        True if the domain ends with ``.ca``.
+    """
+    try:
+        domain = urlparse(url).netloc.lower().replace("www.", "")
+        return domain.endswith(".ca")
     except Exception:
         return False
 
-def _tld_priority(url: str) -> int:
-    """Priorité de TLD pour trier les candidats. Valeur basse = meilleur.
 
-    .fr  → 0  (priorité maximale, site clairement français)
-    autres → 1
+def _tld_priority(url: str) -> int:
+    """Return a sort key for TLD preference.  Lower is better.
+
+    .fr → 0  (clearly French, highest priority)
+    others → 1
+
+    Args:
+        url: Candidate URL.
+
+    Returns:
+        0 for .fr, 1 otherwise.
     """
     try:
-        domain = urlparse(url).netloc.lower().replace('www.', '')
-        return 0 if domain.endswith('.fr') else 1
+        domain = urlparse(url).netloc.lower().replace("www.", "")
+        return 0 if domain.endswith(".fr") else 1
     except Exception:
         return 1
 
-def get_website_with_selenium(denomination: str):
-    """
-    Performs a DuckDuckGo search and validates results using keyword matching.
-    Returns status, URL, and rank.
-    """
-    driver = None 
-    search_query = denomination
-    logging.info(f"Initiating Selenium search for: '{search_query}'")
-    try:
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 
-        # Use Chrome for Testing (portable Linux) if available, else system Chrome
-        cft_chrome = os.path.expanduser('~/.chrome-for-testing/chrome-linux64/chrome')
-        cft_driver = os.path.expanduser('~/.chrome-for-testing/chromedriver-linux64/chromedriver')
-        if os.path.exists(cft_chrome) and os.path.exists(cft_driver):
-            chrome_options.binary_location = cft_chrome
-            logging.info(f"Using Chrome for Testing: {cft_chrome}")
-            driver = webdriver.Chrome(
-                service=ChromeService(executable_path=cft_driver),
-                options=chrome_options,
-            )
+# ============================================================================
+# DDGS SEARCH
+# ============================================================================
+
+def _ddgs_search(query: str, max_results: int = 5) -> list[dict]:
+    """Run a DDG text search and return results list."""
+    from ddgs import DDGS
+    return list(DDGS().text(query, max_results=max_results))
+
+
+def _pick_best_candidate(
+    results: list[dict],
+    keywords: list[str],
+) -> tuple[int, int, str] | None:
+    """Filter DDG results and return the best (tld_priority, rank, root_url) or None."""
+    candidates: list[tuple[int, int, str]] = []
+    for rank, result in enumerate(results, 1):
+        raw_url = result.get("href", "")
+        if not raw_url:
+            continue
+
+        # Always normalise to root domain — companies are in France, paths don't matter
+        url = _strip_to_root(raw_url)
+        domain = urlparse(url).netloc.replace("www.", "")
+        cleaned_domain = domain.replace(".", "").replace("-", "")
+        logger.debug("Checking rank %d: %s → root: %s", rank, raw_url, url)
+
+        if domain in DIRECTORY_DOMAINS:
+            logger.warning("Skipping known directory domain: %s", domain)
+            continue
+
+        if _is_canadian(url):
+            logger.warning("Skipping Canadian domain: %s", domain)
+            continue
+
+        matched = any(
+            normalize_name(kw) in cleaned_domain
+            for kw in keywords
+            if normalize_name(kw)
+        )
+        if matched:
+            candidates.append((_tld_priority(url), rank, url))
+            logger.debug("Keyword match: '%s' in domain '%s'", keywords, domain)
         else:
-            driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chrome_options)
-        
-        url_to_search = f"https://duckduckgo.com/?q={search_query}&ia=web"
-        logging.info(f"Navigating to {url_to_search}")
-        driver.get(url_to_search)
-        
-        time.sleep(random.uniform(1, 3))
-        
-        results = driver.find_elements(By.CSS_SELECTOR, 'a[data-testid="result-title-a"]')
-        logging.info(f"Found {len(results)} potential results.")
-        
-        if not results:
-            logging.warning("No search results found on page.")
-            return 'NON TROUVÉ', None, None
+            logger.debug("No keyword match for domain '%s'", domain)
 
-        stop_words = {'sa', 'sas', 'sarl', 'eurl', 'snc', 'ste', 'et', 'de', 'la', 'les', 'des'}
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    return candidates[0]
 
-        # Collecte tous les candidats valides parmi les 5 premiers résultats,
-        # puis choisit le meilleur en préférant les TLD .fr aux autres.
-        candidates = []  # liste de (tld_priority, rank, url)
-        keywords = [word for word in re.split(r'[\s-]+', denomination) if word.lower() not in stop_words and len(word) > 2]
 
-        for rank, result in enumerate(results[:5], 1):
-            url = result.get_attribute('href')
-            if not url:
-                continue
+def get_website_with_ddgs(denomination: str) -> tuple[str, str | None, int | None]:
+    """Search DuckDuckGo for a company website via the ddgs API (no browser).
 
-            domain = urlparse(url).netloc.replace('www.', '')
-            cleaned_domain = domain.replace('.', '').replace('-', '')
-            logging.info(f"Checking URL: {url} (Domain: {domain}) for '{denomination}'")
+    Strategy:
+    1. Search ``<denomination> fr`` — pick best root-domain match.
+    2. If no match, retry with ``<denomination> nautisme`` as fallback.
 
-            if domain in DIRECTORY_DOMAINS:
-                logging.warning(f"URL is a known directory: {domain}. Skipping.")
-                continue
-
-            if _is_not_french_url(url):
-                logging.warning(f"URL {url} rejetée (non-française : chemin /en/ ou TLD .ca).")
-                continue
-
-            is_match_found = False
-            for keyword in keywords:
-                normalized_keyword = normalize_name(keyword)
-                if normalized_keyword and normalized_keyword in cleaned_domain:
-                    logging.info(f"Keyword '{normalized_keyword}' from '{denomination}' found in domain '{domain}'.")
-                    is_match_found = True
-                    break
-
-            if is_match_found:
-                candidates.append((_tld_priority(url), rank, url))
-            else:
-                logging.info(f"URL {url} does not match any keyword from '{denomination}'. Skipping.")
-
-        if candidates:
-            # Tri : d'abord par priorité TLD (.fr=0 avant les autres=1), puis par rang DDG
-            candidates.sort(key=lambda x: (x[0], x[1]))
-            best_priority, best_rank, best_url = candidates[0]
-            logging.info(f"Meilleur candidat retenu : {best_url} (TLD priority={best_priority}, rank={best_rank})")
-            return 'TROUVÉ', best_url, best_rank
-
-        logging.warning("No valid French URL found after checking top 5 results.")
-        return 'NON TROUVÉ', None, None
-
-    except Exception as e:
-        logging.error(f"An error occurred during Selenium search for query '{search_query}': {e}", exc_info=True)
-        return 'ERREUR', None, None
-    finally:
-        if driver:
-            driver.quit()
-
-def main(input_csv_path, output_dir, limit=None):
-    """
-    Finds company websites using Selenium and saves results to a CSV file.
+    The URL is always normalised to the root domain (scheme + host) so that
+    paths like ``/en/`` are stripped — all targeted companies are in France.
 
     Args:
-        input_csv_path (str): Path to the input CSV file containing company data.
-        output_dir (str): Directory where the output CSV will be saved.
-        limit (int, optional): Limit the number of companies to process for testing. Defaults to None.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-    base_name = os.path.basename(input_csv_path)
-    name_without_ext = os.path.splitext(base_name)[0]
-    output_filename = os.path.join(output_dir, f"{name_without_ext}_websites.csv")
+        denomination: Company legal name (denominationUniteLegale).
 
-    logging.info(f"Script started. Input: '{input_csv_path}', Output: '{output_filename}', Limit: {limit}")
+    Returns:
+        Tuple ``(status, url, rank)`` where status is one of:
+            - ``'TROUVÉ'``     — a matching URL was found
+            - ``'NON TROUVÉ'`` — no match after both searches
+            - ``'ERREUR'``     — ddgs raised an exception
+    """
+    logger.info("Searching for: '%s'", denomination)
+    try:
+        keywords = [
+            word for word in re.split(r"[\s-]+", denomination)
+            if word.lower() not in _STOP_WORDS and len(word) > 2
+        ]
+
+        # ── Pass 1 : "<denomination> fr" ────────────────────────────────────
+        results = _ddgs_search(f"{denomination} fr", max_results=5)
+        logger.debug("Pass 1 — %d results", len(results))
+        best = _pick_best_candidate(results, keywords)
+
+        # ── Pass 2 : fallback with "nautisme" ────────────────────────────────
+        if best is None:
+            logger.info("No match in pass 1 — retrying with 'nautisme' keyword.")
+            results2 = _ddgs_search(f"{denomination} nautisme", max_results=5)
+            logger.debug("Pass 2 — %d results", len(results2))
+            best = _pick_best_candidate(results2, keywords)
+
+        if best is not None:
+            best_priority, best_rank, best_url = best
+            logger.info(
+                "Best match for '%s': %s (TLD priority=%d, rank=%d)",
+                denomination, best_url, best_priority, best_rank,
+            )
+            return "TROUVÉ", best_url, best_rank
+
+        logger.warning("No match found for '%s' after both search passes.", denomination)
+        return "NON TROUVÉ", None, None
+
+    except Exception as exc:
+        logger.error("DDGS error for '%s': %s", denomination, exc, exc_info=True)
+        return "ERREUR", None, None
+
+
+# ============================================================================
+# MAIN PROCESSING LOOP
+# ============================================================================
+
+def process_companies(
+    config: FindWebsitesConfig,
+) -> None:
+    """Find websites for all companies in the input CSV and save results.
+
+    Supports resuming: rows with a non-empty ``statut_recherche`` that is not
+    ``'ERREUR'`` are skipped.  Results are written to disk after each row so
+    that progress is never lost on interruption.
+
+    Args:
+        config: Validated :class:`FindWebsitesConfig` instance.
+    """
+    output_dir = config.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    input_path = config.input_csv
+    stem = input_path.stem
+    output_path = output_dir / f"{stem}_websites.csv"
+
+    logger.info(
+        "Starting website search — input='%s', output='%s', limit=%s",
+        input_path, output_path, config.limit,
+    )
 
     try:
-        df_input = pd.read_csv(input_csv_path)
+        df_input = pd.read_csv(input_path)
     except FileNotFoundError:
-        logging.error(f"The input file '{input_csv_path}' was not found.")
+        logger.error("Input file not found: '%s'", input_path)
         return
 
-    if os.path.exists(output_filename):
-        logging.info(f"Found existing results file: '{output_filename}'. Resuming...")
-        df_output = pd.read_csv(output_filename)
-        # Ensure 'site_web', 'statut_recherche', and 'source_site_web' columns exist after reading
-        if 'site_web' not in df_output.columns:
-            df_output['site_web'] = ''
-        if 'statut_recherche' not in df_output.columns:
-            df_output['statut_recherche'] = ''
-        if 'source_site_web' not in df_output.columns: # NEW COLUMN
-            df_output['source_site_web'] = ''
+    # ── Resume or start fresh ─────────────────────────────────────────────────
+    if output_path.exists():
+        logger.info("Resuming from existing results: '%s'", output_path)
+        df_output = pd.read_csv(output_path)
+        for col in ("site_web", "statut_recherche", "source_site_web"):
+            if col not in df_output.columns:
+                df_output[col] = ""
     else:
-        logging.info("No existing results file found. Starting from scratch.")
+        logger.info("No existing results — starting from scratch.")
         df_output = df_input.copy()
-        df_output['site_web'] = ''
-        df_output['statut_recherche'] = ''
-        df_output['source_site_web'] = '' # NEW COLUMN
+        df_output["site_web"] = ""
+        df_output["statut_recherche"] = ""
+        df_output["source_site_web"] = ""
 
-    df_output['site_web'] = df_output['site_web'].fillna('')
-    df_output['statut_recherche'] = df_output['statut_recherche'].fillna('')
-    df_output['source_site_web'] = df_output['source_site_web'].fillna('') # NEW COLUMN
+    for col in ("site_web", "statut_recherche", "source_site_web"):
+        df_output[col] = df_output[col].fillna("")
 
-    # Determine which rows to process: only those not yet searched or with ERREUR status to retry
-    rows_to_process = df_output[df_output['statut_recherche'].isin(['', 'ERREUR'])].copy()
-    
-    if limit:
-        rows_to_process = rows_to_process.head(limit)
+    # ── Select rows to process ────────────────────────────────────────────────
+    rows_to_process = df_output[df_output["statut_recherche"].isin(["", "ERREUR"])].copy()
+    if config.limit:
+        rows_to_process = rows_to_process.head(config.limit)
+
+    # Always write the output file upfront — even if empty or fully processed.
+    # This guarantees the pipeline's post-step existence check always passes.
+    df_output.to_csv(output_path, index=False, encoding="utf-8")
 
     if rows_to_process.empty:
-        logging.info("No new companies to process or all companies already have a search status (excluding 'ERREUR' which will be retried).")
+        logger.info("All companies already processed — nothing to do.")
         return
 
+    logger.info("%d companies to process.", len(rows_to_process))
+
     try:
-        for original_index, row in tqdm(rows_to_process.iterrows(), total=rows_to_process.shape[0], desc="Finding websites (Selenium)"):
-            denomination = row['denominationUniteLegale']
-            # siren = row['siren'] # SIREN is not directly used in get_website_with_selenium anymore
+        for original_index, row in tqdm(
+            rows_to_process.iterrows(),
+            total=len(rows_to_process),
+            desc="Finding websites",
+        ):
+            denomination = row["denominationUniteLegale"]
+            status, website, rank = get_website_with_ddgs(denomination)
 
-            # Call with denomination, expect rank
-            status, website, rank = get_website_with_selenium(denomination)
-            
-            # Update the original DataFrame (df_output) using its original index
-            df_output.loc[original_index, 'statut_recherche'] = status
-            df_output.loc[original_index, 'site_web'] = website if status == 'TROUVÉ' else ''
-            df_output.loc[original_index, 'source_site_web'] = f"DDG Rank {rank}" if status == 'TROUVÉ' else '' # NEW
-            
-            df_output.to_csv(output_filename, index=False, encoding='utf-8')
+            df_output.loc[original_index, "statut_recherche"] = status
+            df_output.loc[original_index, "site_web"] = website if status == "TROUVÉ" else ""
+            df_output.loc[original_index, "source_site_web"] = (
+                f"DDG Rank {rank}" if status == "TROUVÉ" else ""
+            )
 
-            time.sleep(random.uniform(3, 8)) # Keep varied delay
+            # Save after every row to preserve progress
+            df_output.to_csv(output_path, index=False, encoding="utf-8")
+            logger.debug("Saved progress → '%s'", output_path)
+
+            time.sleep(random.uniform(3, 8))
 
     except KeyboardInterrupt:
-        logging.warning("\n[STOP] Script interrupted by user. Progress has been saved.")
+        logger.warning("Interrupted by user — progress saved to '%s'.", output_path)
         sys.exit(0)
-    except Exception as e:
-        logging.critical(f"\n[FATAL] An unexpected error occurred: {e}. Progress has been saved.", exc_info=True)
+    except Exception as exc:
+        logger.critical(
+            "Fatal error during processing: %s — progress saved.", exc, exc_info=True
+        )
         sys.exit(1)
 
-    logging.info(f"\nProcessing complete. Results saved to '{output_filename}'.")
+    logger.info("Processing complete — results saved to '%s'.", output_path)
+
+
+# ============================================================================
+# CLI
+# ============================================================================
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("input_csv", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--output-dir",
+    type=click.Path(file_okay=False),
+    default="Results",
+    show_default=True,
+    help="Dossier où sauvegarder le CSV de sortie.",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=None,
+    help="Limiter le nombre d'entreprises traitées (tests).",
+)
+def main(input_csv: str, output_dir: str, limit: int | None) -> None:
+    """Find company websites via DuckDuckGo API (ddgs, no browser).
+
+    INPUT_CSV is the filtered companies CSV produced by prospect_analyzer.py.
+    """
+    setup_pipeline_logging(log_dir="Logs", sector_name="find_websites")
+    logger.info("find_websites.py started — input='%s'", input_csv)
+
+    try:
+        config = FindWebsitesConfig(
+            input_csv=Path(input_csv),
+            output_dir=Path(output_dir),
+            limit=limit,
+        )
+    except ValidationError as exc:
+        click.echo(f"Erreur de configuration :\n{exc}", err=True)
+        sys.exit(1)
+
+    process_companies(config)
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Find company websites using Selenium.")
-    parser.add_argument("input_csv", type=str, help="Path to the input CSV file.")
-    parser.add_argument("--output_dir", type=str, default="Results", help="Directory to save the output CSV. Defaults to 'Results'.")
-    parser.add_argument("--limit", type=int, help="Limit the number of companies to process for testing.")
-    args = parser.parse_args()
-    main(args.input_csv, args.output_dir, args.limit)
-
+    main()

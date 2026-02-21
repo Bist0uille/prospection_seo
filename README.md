@@ -18,7 +18,7 @@ python Scripts/run_full_pipeline.py --sector Sectors/restaurants.txt --limit 50 
 | Étape | Script | Description |
 |-------|--------|-------------|
 | 1 | `prospect_analyzer.py` | Filtre la base INSEE par codes NAF, tranche d'effectifs, statut actif, déduplique par SIREN |
-| 2 | `find_websites.py` | Recherche DuckDuckGo via Selenium headless, validation nom/domaine, exclusion annuaires |
+| 2 | `find_websites.py` | Recherche DuckDuckGo via API `ddgs` (sans navigateur), normalisation domaine, exclusion annuaires, fallback "nautisme" |
 | 3 | `prospect_analyzer.py` | Vérifie chaque site (matching domaine, blocklist, filtre sites non-français) |
 | 4 | `seo_auditor.py` | Crawl BFS léger (max 30 pages), extraction signaux SEO business |
 | 5 | `prospect_analyzer.py` | Scoring d'opportunité business (1–10), rapport CSV final |
@@ -48,16 +48,18 @@ Les secteurs sont définis dans `Sectors/` — un fichier `.txt` par secteur, un
 Secteurs inclus : `nautisme`, `architectes`, `immobilier`, `restaurants`.
 Copier `Sectors/template.txt` pour créer un nouveau secteur.
 
-## Filtrage des sites non-français
+## Validation des sites (étape 2)
 
-Le pipeline rejette automatiquement :
-- Les URLs avec `/en/` dans le chemin (versions anglaises de sites .eu)
-- Les TLD `.ca` (sites canadiens/québécois)
-- En cas de plusieurs candidats valides, les domaines `.fr` sont préférés aux `.com` / `.eu`
+La recherche DDG retourne l'URL racine du domaine (chemins ignorés) et applique les filtres suivants :
+- **Blocklist d'annuaires** : societe.com, pappers.fr, pagesjaunes.fr, linkedin.com, etc. automatiquement exclus
+- **TLD `.ca`** rejeté (domaines canadiens)
+- **Matching keyword** : le domaine doit contenir au moins un mot-clé significatif (≥ 4 caractères) issu du nom de l'entreprise
+- **Préférence `.fr`** : en cas de plusieurs candidats valides, les domaines `.fr` sont prioritaires
+- **Fallback "nautisme"** : si aucun résultat pertinent, la recherche est relancée avec le mot-clé secteur
 
 ## Audit SEO (seo_auditor.py)
 
-Crawl BFS sans Selenium — rapide et stable. Signaux extraits par site :
+Crawl BFS léger — rapide et stable, sans navigateur. Signaux extraits par site :
 
 | Signal | Description |
 |--------|-------------|
@@ -114,10 +116,10 @@ Score de 1 à 10 mesurant la **probabilité de deal**, pas la qualité SEO acad�
 ```
 ├── Scripts/
 │   ├── run_full_pipeline.py      # Point d'entrée — pipeline multi-secteur
-│   ├── find_websites.py          # Recherche sites web via Selenium/DuckDuckGo
+│   ├── find_websites.py          # Recherche sites web via API ddgs / DuckDuckGo
 │   ├── seo_auditor.py            # Audit SEO par crawl BFS léger
 │   ├── prospect_analyzer.py      # Filtrage, vérification, scoring
-│   └── botparser_log.py          # Utilitaires de logging
+│   └── core/                     # Infrastructure partagée (logging, modèles Pydantic)
 │
 ├── Sectors/
 │   ├── nautisme.txt              # Codes APE secteur nautisme
@@ -143,15 +145,18 @@ Score de 1 à 10 mesurant la **probabilité de deal**, pas la qualité SEO acad�
 ```bash
 git clone https://github.com/Bist0uille/prospection_seo.git
 cd prospection_seo
+make install        # crée le venv WSL et installe les dépendances
+```
 
-python -m venv .venv
-source .venv/bin/activate       # Linux/WSL
-# .venv\Scripts\activate        # Windows
+Ou manuellement :
 
+```bash
+python3 -m venv .venv_wsl
+source .venv_wsl/bin/activate
 pip install -r requirements.txt
 ```
 
-Chrome ou Chromium doit être installé (utilisé uniquement pour l'étape de recherche de sites). Sur WSL sans Chrome Linux, le script détecte automatiquement [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) s'il est présent dans `~/.chrome-for-testing/`.
+> Aucun navigateur requis — la recherche de sites (étape 2) utilise l'API `ddgs` directement.
 
 ## Rapport final
 
