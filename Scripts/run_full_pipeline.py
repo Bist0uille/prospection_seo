@@ -31,6 +31,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from Scripts.core.logging_config import get_logger, setup_pipeline_logging
 from Scripts.core.models import PipelineConfig
+from Scripts.contact_scraper import generate_html_report, run_contact_extraction
 from Scripts.prospect_analyzer import (
     create_prospect_scoring_v2,
     filter_companies_by_employees,
@@ -371,9 +372,9 @@ def main(
                 os.remove(f)
                 logger.debug("  Supprimé : %s", f)
 
-    # ── [1/5] Filter by NAF codes + employee band ─────────────────────────────
+    # ── [1/6] Filter by NAF codes + employee band ─────────────────────────────
     logger.info(
-        "[1/5] Filtrage des entreprises (%d codes APE, %d+ salariés)...",
+        "[1/6] Filtrage des entreprises (%d codes APE, %d+ salariés)...",
         len(naf_codes), config.min_employees,
     )
     if config.pg_dsn:
@@ -393,8 +394,8 @@ def main(
             employee_codes=employee_codes,
         )
 
-    # ── [2/5] Website search via DDGS / DuckDuckGo ───────────────────────────
-    logger.info("[2/5] Recherche de sites web (DDGS / DuckDuckGo)...")
+    # ── [2/6] Website search via DDGS / DuckDuckGo ───────────────────────────
+    logger.info("[2/6] Recherche de sites web (DDGS / DuckDuckGo)...")
     if os.path.exists(websites_csv):
         os.remove(websites_csv)
 
@@ -417,21 +418,28 @@ def main(
         logger.error("Expected output file missing → %s", websites_csv)
         sys.exit(1)
 
-    # ── [3/5] Domain-based verification ──────────────────────────────────────
-    logger.info("[3/5] Vérification des sites par domaine...")
+    # ── [3/6] Domain-based verification ──────────────────────────────────────
+    logger.info("[3/6] Vérification des sites par domaine...")
     verify_websites_by_domain(websites_csv, verified_csv)
 
-    # ── [4/5] SEO audit ───────────────────────────────────────────────────────
+    # ── [4/6] SEO audit ───────────────────────────────────────────────────────
     if not config.skip_audit:
-        logger.info("[4/5] Audit SEO (crawl léger)...")
+        logger.info("[4/6] Audit SEO (crawl léger)...")
         run_seo_audit(verified_csv, seo_audit_csv, max_pages=30)
     else:
-        logger.info("[4/5] Audit SEO — IGNORÉ (--skip-audit)")
+        logger.info("[4/6] Audit SEO — IGNORÉ (--skip-audit)")
         shutil.copy2(verified_csv, seo_audit_csv)
 
-    # ── [5/5] Prospect scoring v2 ─────────────────────────────────────────────
-    logger.info("[5/5] Scoring de prospection v2...")
+    # ── [5/6] Prospect scoring v2 ─────────────────────────────────────────────
+    logger.info("[5/6] Scoring de prospection v2...")
     create_prospect_scoring_v2(seo_audit_csv, final_report_csv)
+
+    # ── [6/6] Contact extraction + HTML report ────────────────────────────────
+    logger.info("[6/6] Extraction des contacts (email + téléphone)...")
+    run_contact_extraction(final_report_csv, final_report_csv)
+    html_report_path = f"{output_dir}/rapport_prospects.html"
+    generate_html_report(final_report_csv, html_report_path, sector_name=sector_name)
+    logger.info("  Rapport HTML : %s", html_report_path)
 
     # ── Cleanup intermediates ─────────────────────────────────────────────────
     if not config.keep_intermediates:

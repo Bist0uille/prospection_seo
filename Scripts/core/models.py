@@ -256,3 +256,27 @@ class SeoAuditConfig(BaseModel):
         if not v.exists():
             raise ValueError(f"Input CSV not found: '{v}'.")
         return v
+
+
+# ── contact_scraper.py model ──────────────────────────────────────────────────
+
+class ContactScraperConfig(BaseModel):
+    """Validated input configuration for the ``contact_scraper.py`` standalone CLI."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    input_csv: Path = Field(
+        ...,
+        description="CSV file with a 'site_web' column.",
+    )
+    output_csv: Path = Field(
+        default=Path("Results/contacts.csv"),
+        description="Path of the enriched output CSV.",
+    )
+
+    @field_validator("input_csv")
+    @classmethod
+    def contact_input_must_exist(cls, v: Path) -> Path:
+        if not v.exists():
+            raise ValueError(f"Input CSV not found: '{v}'.")
+        return v

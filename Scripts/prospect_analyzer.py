@@ -13,6 +13,7 @@ Pipeline steps covered:
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from urllib.parse import urlparse
 
 import numpy as np
@@ -451,8 +452,22 @@ def create_prospect_scoring_v2(input_path: str, output_path: str) -> str:
 
         if has_blog:
             if blog_status == "abandonné":
-                score += 5
-                logger.debug("  +5 (blog abandonné)")
+                # Stronger signal the older the blog — compute actual age
+                derniere_maj = str(row.get("derniere_maj_blog", "") or "")
+                blog_age_years = None
+                if derniere_maj and derniere_maj not in ("nan", "None", ""):
+                    try:
+                        parsed = datetime.strptime(derniere_maj[:10], "%Y-%m-%d")
+                    except ValueError:
+                        parsed = None
+                    if parsed:
+                        blog_age_years = (datetime.now() - parsed).days / 365
+                if blog_age_years is not None and blog_age_years > 4:
+                    score += 7
+                    logger.debug("  +7 (blog abandonné >4 ans)")
+                else:
+                    score += 5
+                    logger.debug("  +5 (blog abandonné)")
             elif blog_status == "semi-actif":
                 score += 2
                 logger.debug("  +2 (blog semi-actif)")
@@ -462,6 +477,19 @@ def create_prospect_scoring_v2(input_path: str, output_path: str) -> str:
         else:
             score += 1
             logger.debug("  +1 (no blog)")
+
+        # ── Overall site activity (fallback when blog has no date signal) ─────
+        # Handles sites where blog exists but crawler found no dates (blog_status
+        # stays "présent"), yet the site is clearly zombie based on last activity.
+        activite = str(row.get("activite_status", "") or "").lower()
+        blog_has_date_signal = blog_status in ("abandonné", "semi-actif", "actif")
+        if not blog_has_date_signal:
+            if activite == "abandonné":
+                score += 4
+                logger.debug("  +4 (activite_status abandonné, blog sans dates)")
+            elif activite == "semi-actif":
+                score += 1
+                logger.debug("  +1 (activite_status semi-actif, blog sans dates)")
 
         # ── Site size ─────────────────────────────────────────────────────────
         if nb_pages < 5:

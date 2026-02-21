@@ -35,13 +35,10 @@
   .badge.warn { background: #fff3e0; color: #e65100; }
   .badge.ok   { background: #e8f5e9; color: #1b5e20; }
   .na { color: #bdbdbd; }
+  .date-maj { font-size: 10px; color: #9e9e9e; }
   .signaux ul { list-style: none; padding: 0; }
   .signaux li { font-size: 11px; color: #555; padding: 1px 0; }
   .signaux li::before { content: "• "; color: #c62828; }
-  .legend { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
-  .legend-dot { width: 14px; height: 14px; border-radius: 3px; }
-  .note { font-size: 11px; color: #9e9e9e; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -50,9 +47,9 @@
   <p>Entreprises de 10+ salariés avec site web identifié — classées par score d'opportunité (sites anglophones exclus)</p>
   <div class="meta">
     <div class="meta-item"><div class="num">35</div><div class="lbl">Prospects analysés</div></div>
-    <div class="meta-item"><div class="num">5</div><div class="lbl">Haute priorité (≥7)</div></div>
+    <div class="meta-item"><div class="num">9</div><div class="lbl">Haute priorité (≥7)</div></div>
     <div class="meta-item"><div class="num">9</div><div class="lbl">Priorité moyenne (≥5)</div></div>
-    <div class="meta-item"><div class="num">4.1/10</div><div class="lbl">Score moyen</div></div>
+    <div class="meta-item"><div class="num">4.7/10</div><div class="lbl">Score moyen</div></div>
   </div>
 </div>
 
@@ -62,10 +59,11 @@
     <th>Score</th>
     <th>Entreprise</th>
     <th>Site web</th>
+    <th>Email</th>
+    <th>Téléphone</th>
     <th>CMS</th>
     <th>Pages</th>
     <th>Blog</th>
-    <th>Sitemap</th>
     <th>Signaux d'opportunité</th>
   </tr>
 </thead>
@@ -75,362 +73,388 @@
       <td class="score-cell" style="background:#c62828;color:#fff">9.5/10</td>
       <td class="name">Pilotage De La Gironde</td>
       <td class="url"><a href="https://pilotagegironde.com/" target="_blank">pilotagegironde.com</a></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:0556742500">05 56 74 25 00</a></td>
       <td class="center"><span class="cms">Joomla</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
       <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>contenu faible (148 mots/page)</li><li>ratio texte/HTML faible (6%)</li><li>CMS : Joomla</li><li>2 pages sans meta desc</li><li>10 pages sans H1</li></ul></td>
     </tr>
     <tr>
       <td class="score-cell" style="background:#c62828;color:#fff">9.5/10</td>
       <td class="name">Nautic Elec - Gulf Stream</td>
       <td class="url"><a href="https://www.nautic-elec.com/" target="_blank">nautic-elec.com</a></td>
+      <td class="url"><a href="mailto:office@nautic-elec.com">office@nautic-elec.com</a></td>
+      <td class="url"><a href="tel:0546522301">05 46 52 23 01</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">2</td>
       <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
       <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>2 pages seulement</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>2 pages sans meta desc</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#e65100;color:#fff">7.0/10</td>
+      <td class="score-cell" style="background:#c62828;color:#fff">9.0/10</td>
       <td class="name">Teck Inox</td>
-      <td class="url"><a href="https://www.teck-inox.com/" target="_blank">teck-inox.com</a></td>
+      <td class="url"><a href="https://www.teck-inox.com/" target="_blank">teck-inox.com</a><br><span class="date-maj">07/2019</span></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:0649472917">06 49 47 29 17</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
-      <td class="center"><span class="badge warn">Abandonné</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
+      <td class="center"><span class="badge warn">Abandonné</span><br><span class="date-maj">07/2019</span></td>
       <td class="signaux"><ul><li>blog abandonné</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>6 pages sans meta desc</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#e65100;color:#fff">7.0/10</td>
-      <td class="name">Chantier Naval Couach - Cnc</td>
-      <td class="url"><a href="https://couach.com/" target="_blank">couach.com</a></td>
+      <td class="score-cell" style="background:#c62828;color:#fff">8.0/10</td>
+      <td class="name">Naviteam</td>
+      <td class="url"><a href="https://naviteam.eu/" target="_blank">naviteam.eu</a><br><span class="date-maj">06/2019</span></td>
+      <td class="url"><a href="mailto:piotr@scs.szczecin.pl">piotr@scs.szczecin.pl</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
+      <td class="center"><span class="badge warn">Abandonné</span><br><span class="date-maj">06/2019</span></td>
+      <td class="signaux"><ul><li>blog abandonné</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#c62828;color:#fff">8.0/10</td>
+      <td class="name">Chantier Naval Couach - Cnc</td>
+      <td class="url"><a href="https://couach.com/" target="_blank">couach.com</a><br><span class="date-maj">01/2026</span></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:0556223550">05 56 22 35 50</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
       <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (1%)</li><li>CMS : WordPress</li><li>7 pages sans meta desc</li><li>9 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#c62828;color:#fff">8.0/10</td>
+      <td class="name">Alternatives Energies</td>
+      <td class="url"><a href="https://www.alternativesenergies.com/" target="_blank">alternativesenergies.com</a><br><span class="date-maj">06/2020</span></td>
+      <td class="url"><a href="mailto:contact@alternativesenergies.com">contact@alternativesenergies.com</a></td>
+      <td class="url"><a href="tel:0546502987">05 46 50 29 87</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Abandonné</span><br><span class="date-maj">06/2020</span></td>
+      <td class="signaux"><ul><li>blog abandonné</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#e65100;color:#fff">7.5/10</td>
+      <td class="name">Chantier Naval Des Minimes</td>
+      <td class="url"><a href="https://chantier-naval-minimes.com/" target="_blank">chantier-naval-minimes.com</a><br><span class="date-maj">10/2025</span></td>
+      <td class="url"><a href="mailto:contact@cnminimes.fr">contact@cnminimes.fr</a></td>
+      <td class="url"><a href="tel:0546447547">05 46 44 75 47</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (1%)</li><li>CMS : WordPress</li><li>3 pages sans meta desc</li><li>10 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#e65100;color:#fff">7.0/10</td>
+      <td class="name">Sea Invest Shipping Agency</td>
+      <td class="url"><a href="https://sea-invest.com/" target="_blank">sea-invest.com</a><br><span class="date-maj">02/2026</span></td>
+      <td class="url"><a href="mailto:info@sea-investcorporation.lu">info@sea-investcorporation.lu</a></td>
+      <td class="url"><a href="tel:0141053700">01 41 05 37 00</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>10 pages sans meta desc</li><li>2 pages sans H1</li></ul></td>
     </tr>
     <tr>
       <td class="score-cell" style="background:#e65100;color:#fff">7.0/10</td>
       <td class="name">Sarl Lecamus</td>
       <td class="url"><a href="https://www.lecamus.com/" target="_blank">lecamus.com</a></td>
+      <td class="url"><a href="mailto:contacts@lecamus.com">contacts@lecamus.com</a></td>
+      <td class="url"><a href="tel:0546426128">05 46 42 61 28</a></td>
       <td class="center"><span class="cms">Wix</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
       <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (0%)</li><li>CMS : Wix</li><li>9 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#e65100;color:#fff">6.5/10</td>
-      <td class="name">Chantier Naval Des Minimes</td>
-      <td class="url"><a href="https://chantier-naval-minimes.com/" target="_blank">chantier-naval-minimes.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (1%)</li><li>CMS : WordPress</li><li>3 pages sans meta desc</li><li>10 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#e65100;color:#fff">6.0/10</td>
-      <td class="name">Naviteam</td>
-      <td class="url"><a href="https://naviteam.eu/" target="_blank">naviteam.eu</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge warn">Abandonné</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>blog abandonné</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#e65100;color:#fff">6.0/10</td>
-      <td class="name">Sea Invest Shipping Agency</td>
-      <td class="url"><a href="https://sea-invest.com/" target="_blank">sea-invest.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>10 pages sans meta desc</li><li>2 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#e65100;color:#fff">6.0/10</td>
-      <td class="name">Alternatives Energies</td>
-      <td class="url"><a href="https://www.alternativesenergies.com/" target="_blank">alternativesenergies.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge warn">Abandonné</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>blog abandonné</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">5.5/10</td>
-      <td class="name">Lamanage Et Services Maritimes Des Ports De La Rochelle - Charente</td>
-      <td class="url"><a href="https://lamanage-syndicatpro.fr/" target="_blank">lamanage-syndicatpro.fr</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>10 pages sans meta desc</li><li>5 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">5.5/10</td>
-      <td class="name">Atlantique Sellerie Christian Costes</td>
-      <td class="url"><a href="http://atlantiquesellerie.com/" target="_blank">atlantiquesellerie.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (7%)</li><li>CMS : WordPress</li><li>2 pages sans meta desc</li><li>6 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">5.5/10</td>
-      <td class="name">Syndicat Professionnel Des Pilotes Maritimes</td>
-      <td class="url"><a href="https://lamanage-syndicatpro.fr/" target="_blank">lamanage-syndicatpro.fr</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>10 pages sans meta desc</li><li>5 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">5.5/10</td>
-      <td class="name">Pinball Boat</td>
-      <td class="url"><a href="https://www.pinball-boat.com/" target="_blank">pinball-boat.com</a></td>
-      <td class="center"><span class="na">—</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : nan</li><li>8 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">5.0/10</td>
-      <td class="name">Rc Marine La Rochelle</td>
-      <td class="url"><a href="https://www.rc-marine.fr/" target="_blank">rc-marine.fr</a></td>
-      <td class="center"><span class="na">—</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : nan</li><li>9 pages sans meta desc</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">4.5/10</td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.5/10</td>
       <td class="name">Sa Chantiers Amel</td>
-      <td class="url"><a href="https://amel.fr/" target="_blank">amel.fr</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>8 pages sans meta desc</li><li>7 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">4.5/10</td>
-      <td class="name">Spl D Exploitation Du Port Departemental De Saint-Jean-De-Luz-Ciboure</td>
-      <td class="url"><a href="https://www.port-saintjeandeluz-ciboure.com/" target="_blank">port-saintjeandeluz-ciboure.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>2 pages sans meta desc</li><li>4 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">4.0/10</td>
-      <td class="name">Chantier Nautique Du Vieux Port</td>
-      <td class="url"><a href="https://chantiernautiqueduvieuxport.com/" target="_blank">chantiernautiqueduvieuxport.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">4.0/10</td>
-      <td class="name">Grassi Bateaux Sarl</td>
-      <td class="url"><a href="https://www.grassibateaux.com/" target="_blank">grassibateaux.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (4%)</li><li>CMS : WordPress</li><li>6 pages sans meta desc</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">4.0/10</td>
-      <td class="name">Dubourdieu 1800</td>
-      <td class="url"><a href="https://www.dubourdieu.fr/" target="_blank">dubourdieu.fr</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>9 pages sans meta desc</li><li>6 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#f9a825;color:#212121">4.0/10</td>
-      <td class="name">B2 Marine</td>
-      <td class="url"><a href="https://www.b2marine.fr/" target="_blank">b2marine.fr</a></td>
-      <td class="center"><span class="na">—</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge ok">✓</span></td>
-      <td class="signaux"><ul><li>ratio texte/HTML faible (5%)</li><li>CMS : nan</li><li>4 pages sans meta desc</li><li>5 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">3.5/10</td>
-      <td class="name">Ocea</td>
-      <td class="url"><a href="https://www.ocea.fr/" target="_blank">ocea.fr</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">5</td>
-      <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>1 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">3.0/10</td>
-      <td class="name">Grand Port Maritime De La Rochelle</td>
-      <td class="url"><a href="https://www.larochelle.port.fr/" target="_blank">larochelle.port.fr</a></td>
-      <td class="center"><span class="na">—</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (4%)</li><li>CMS : nan</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">3.0/10</td>
-      <td class="name">Fountaine Pajot</td>
-      <td class="url"><a href="https://www.fountaine-pajot.com/" target="_blank">fountaine-pajot.com</a></td>
+      <td class="url"><a href="https://amel.fr/" target="_blank">amel.fr</a><br><span class="date-maj">02/2026</span></td>
+      <td class="url"><a href="mailto:contact@amel.fr">contact@amel.fr</a></td>
+      <td class="url"><a href="tel:0546551731">05 46 55 17 31</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge warn">Semi-actif</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>blog semi-actif</li><li>pas de sitemap</li><li>ratio texte/HTML faible (8%)</li><li>CMS : WordPress</li></ul></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>8 pages sans meta desc</li><li>7 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">3.0/10</td>
-      <td class="name">Boluda La Rochelle</td>
-      <td class="url"><a href="https://boluda.fr/" target="_blank">boluda.fr</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>9 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">2.5/10</td>
-      <td class="name">Rotomod</td>
-      <td class="url"><a href="https://www.rotomod-design.com/" target="_blank">rotomod-design.com</a></td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.5/10</td>
+      <td class="name">Atlantique Sellerie Christian Costes</td>
+      <td class="url"><a href="http://atlantiquesellerie.com/" target="_blank">atlantiquesellerie.com</a></td>
+      <td class="url"><a href="mailto:clairemarie@atlantiquesellerie.com">clairemarie@atlantiquesellerie.com</a></td>
+      <td class="url"><a href="tel:0546564550">05 46 56 45 50</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge bad">Non</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li><li>3 pages sans H1</li></ul></td>
+      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (7%)</li><li>CMS : WordPress</li><li>2 pages sans meta desc</li><li>6 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">2.0/10</td>
-      <td class="name">Exel Yachting</td>
-      <td class="url"><a href="https://www.exel-industries.com/" target="_blank">exel-industries.com</a></td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.5/10</td>
+      <td class="name">Lamanage Et Services Maritimes Des Ports De La Rochelle - Charente</td>
+      <td class="url"><a href="https://lamanage-syndicatpro.fr/" target="_blank">lamanage-syndicatpro.fr</a></td>
+      <td class="url"><a href="mailto:contact@lamanage-syndicatpro.fr">contact@lamanage-syndicatpro.fr</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge ok">✓</span></td>
-      <td class="signaux"><ul><li>ratio texte/HTML faible (5%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li><li>9 pages sans H1</li></ul></td>
+      <td class="center"><span class="badge bad">Non</span></td>
+      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>10 pages sans meta desc</li><li>5 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">2.0/10</td>
-      <td class="name">Uchimata Services</td>
-      <td class="url"><a href="https://uchimata-shop.fr/" target="_blank">uchimata-shop.fr</a></td>
-      <td class="center"><span class="cms">Shopify</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : Shopify</li><li>4 pages sans meta desc</li><li>1 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">2.0/10</td>
-      <td class="name">Sealver</td>
-      <td class="url"><a href="https://sealver.com/" target="_blank">sealver.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>4 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.5/10</td>
-      <td class="name">Nautitech Catamarans</td>
-      <td class="url"><a href="https://www.nautitechcatamarans.com/" target="_blank">nautitechcatamarans.com</a></td>
-      <td class="center"><span class="cms">Drupal</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge ok">✓</span></td>
-      <td class="signaux"><ul><li>ratio texte/HTML faible (13%)</li><li>CMS : Drupal</li><li>5 pages sans meta desc</li><li>2 pages sans H1</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.0/10</td>
-      <td class="name">Strato Compo</td>
-      <td class="url"><a href="https://www.stratocompo.com/" target="_blank">stratocompo.com</a></td>
-      <td class="center"><span class="cms">WordPress</span></td>
-      <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge ok">✓</span></td>
-      <td class="signaux"><ul><li>ratio texte/HTML faible (8%)</li><li>CMS : WordPress</li></ul></td>
-    </tr>
-    <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.0/10</td>
-      <td class="name">Survitec Sas</td>
-      <td class="url"><a href="https://survitecgroup.com/" target="_blank">survitecgroup.com</a></td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.5/10</td>
+      <td class="name">Pinball Boat</td>
+      <td class="url"><a href="https://www.pinball-boat.com/" target="_blank">pinball-boat.com</a></td>
+      <td class="url"><a href="mailto:contact@pinball-boat.com">contact@pinball-boat.com</a></td>
+      <td class="url"><a href="tel:0608027921">06 08 02 79 21</a></td>
       <td class="center"><span class="na">—</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge ok">✓</span></td>
-      <td class="signaux"><ul><li>ratio texte/HTML faible (3%)</li><li>CMS : nan</li><li>1 pages sans H1</li></ul></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : nan</li><li>8 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.0/10</td>
-      <td class="name">C3 Technologies</td>
-      <td class="url"><a href="http://www.c3technologies.fr/" target="_blank">c3technologies.fr</a></td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.5/10</td>
+      <td class="name">Syndicat Professionnel Des Pilotes Maritimes</td>
+      <td class="url"><a href="https://lamanage-syndicatpro.fr/" target="_blank">lamanage-syndicatpro.fr</a></td>
+      <td class="url"><a href="mailto:contact@lamanage-syndicatpro.fr">contact@lamanage-syndicatpro.fr</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
-      <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
+      <td class="center"><span class="badge bad">Non</span></td>
+      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>10 pages sans meta desc</li><li>5 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.0/10</td>
+      <td class="name">Grassi Bateaux Sarl</td>
+      <td class="url"><a href="https://www.grassibateaux.com/" target="_blank">grassibateaux.com</a><br><span class="date-maj">02/2026</span></td>
+      <td class="url"><a href="mailto:thibaut@grassibateaux.com">thibaut@grassibateaux.com</a></td>
+      <td class="url"><a href="tel:0546454006">05 46 45 40 06</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (4%)</li><li>CMS : WordPress</li><li>6 pages sans meta desc</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.0/10</td>
+      <td class="name">Chantier Nautique Du Vieux Port</td>
+      <td class="url"><a href="https://chantiernautiqueduvieuxport.com/" target="_blank">chantiernautiqueduvieuxport.com</a><br><span class="date-maj">01/2026</span></td>
+      <td class="url"><a href="mailto:contact@cnvp.fr">contact@cnvp.fr</a></td>
+      <td class="url"><a href="tel:0546414211">05 46 41 42 11</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge bad">Non</span></td>
+      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.0/10</td>
+      <td class="name">C3 Technologies</td>
+      <td class="url"><a href="http://www.c3technologies.fr/" target="_blank">c3technologies.fr</a><br><span class="date-maj">11/2020</span></td>
+      <td class="url"><a href="mailto:contact@c3technologies.fr">contact@c3technologies.fr</a></td>
+      <td class="url"><a href="tel:0546305458">05 46 30 54 58</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Abandonné</span></td>
       <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (10%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li><li>1 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.0/10</td>
-      <td class="name">By Paint Service</td>
-      <td class="url"><a href="https://paintslab.com/" target="_blank">paintslab.com</a></td>
-      <td class="center"><span class="cms">Shopify</span></td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">5.0/10</td>
+      <td class="name">Rc Marine La Rochelle</td>
+      <td class="url"><a href="https://www.rc-marine.fr/" target="_blank">rc-marine.fr</a></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:0251554207">02 51 55 42 07</a></td>
+      <td class="center"><span class="na">—</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
-      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : Shopify</li><li>1 pages sans meta desc</li></ul></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : nan</li><li>9 pages sans meta desc</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.0/10</td>
-      <td class="name">Rm Yachts</td>
-      <td class="url"><a href="https://www.rm-yachts.com/" target="_blank">rm-yachts.com</a></td>
+      <td class="score-cell" style="background:#f9a825;color:#fff">4.5/10</td>
+      <td class="name">Spl D Exploitation Du Port Departemental De Saint-Jean-De-Luz-Ciboure</td>
+      <td class="url"><a href="https://www.port-saintjeandeluz-ciboure.com/" target="_blank">port-saintjeandeluz-ciboure.com</a><br><span class="date-maj">02/2026</span></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:0559472681">05 59 47 26 81</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span><br><span class="date-maj">02/2026</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>2 pages sans meta desc</li><li>4 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">4.5/10</td>
+      <td class="name">Ocea</td>
+      <td class="url"><a href="https://www.ocea.fr/" target="_blank">ocea.fr</a><br><span class="date-maj">10/2025</span></td>
+      <td class="url"><a href="mailto:commercial@ocea.fr">commercial@ocea.fr</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">5</td>
+      <td class="center"><span class="badge bad">Non</span></td>
+      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>1 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">4.0/10</td>
+      <td class="name">Dubourdieu 1800</td>
+      <td class="url"><a href="https://www.dubourdieu.fr/" target="_blank">dubourdieu.fr</a></td>
+      <td class="url"><a href="mailto:info@demolink.org">info@demolink.org</a></td>
+      <td class="url"><a href="tel:0556660055">05 56 66 00 55</a></td>
       <td class="center"><span class="cms">WordPress</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge bad">✗</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>9 pages sans meta desc</li><li>6 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">4.0/10</td>
+      <td class="name">Boluda La Rochelle</td>
+      <td class="url"><a href="https://boluda.fr/" target="_blank">boluda.fr</a><br><span class="date-maj">11/2025</span></td>
+      <td class="url"><a href="mailto:boluda-france@boluda.fr">boluda-france@boluda.fr</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : WordPress</li><li>9 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#f9a825;color:#fff">4.0/10</td>
+      <td class="name">B2 Marine</td>
+      <td class="url"><a href="https://www.b2marine.fr/" target="_blank">b2marine.fr</a></td>
+      <td class="url"><a href="mailto:contact@b2marine.fr">contact@b2marine.fr</a></td>
+      <td class="url"><a href="tel:0556206741">05 56 20 67 41</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
+      <td class="signaux"><ul><li>ratio texte/HTML faible (5%)</li><li>CMS : nan</li><li>4 pages sans meta desc</li><li>5 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">3.5/10</td>
+      <td class="name">Rotomod</td>
+      <td class="url"><a href="https://www.rotomod-design.com/" target="_blank">rotomod-design.com</a><br><span class="date-maj">10/2025</span></td>
+      <td class="url"><a href="mailto:info@rotomod-design.com">info@rotomod-design.com</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge bad">Non</span></td>
+      <td class="signaux"><ul><li>pas de blog</li><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li><li>3 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">3.0/10</td>
+      <td class="name">Sealver</td>
+      <td class="url"><a href="https://sealver.com/" target="_blank">sealver.com</a><br><span class="date-maj">01/2026</span></td>
+      <td class="url"><a href="mailto:contact@sealver.com">contact@sealver.com</a></td>
+      <td class="url"><a href="tel:0558784500">05 58 78 45 00</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>4 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">3.0/10</td>
+      <td class="name">Grand Port Maritime De La Rochelle</td>
+      <td class="url"><a href="https://www.larochelle.port.fr/" target="_blank">larochelle.port.fr</a></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (4%)</li><li>CMS : nan</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">3.0/10</td>
+      <td class="name">Fountaine Pajot</td>
+      <td class="url"><a href="https://www.fountaine-pajot.com/" target="_blank">fountaine-pajot.com</a><br><span class="date-maj">10/2024</span></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span><br><span class="date-maj">10/2024</span></td>
+      <td class="signaux"><ul><li>blog semi-actif</li><li>pas de sitemap</li><li>ratio texte/HTML faible (8%)</li><li>CMS : WordPress</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">2.0/10</td>
+      <td class="name">Exel Yachting</td>
+      <td class="url"><a href="https://www.exel-industries.com/" target="_blank">exel-industries.com</a><br><span class="date-maj">02/2026</span></td>
+      <td class="url"><a href="mailto:contact@exel-industries.com">contact@exel-industries.com</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span><br><span class="date-maj">02/2026</span></td>
+      <td class="signaux"><ul><li>ratio texte/HTML faible (5%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li><li>9 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">2.0/10</td>
+      <td class="name">Uchimata Services</td>
+      <td class="url"><a href="https://uchimata-shop.fr/" target="_blank">uchimata-shop.fr</a></td>
+      <td class="url"><a href="mailto:contact@uchimata.fr">contact@uchimata.fr</a></td>
+      <td class="url"><a href="tel:0546521642">05 46 52 16 42</a></td>
+      <td class="center"><span class="cms">Shopify</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (3%)</li><li>CMS : Shopify</li><li>4 pages sans meta desc</li><li>1 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">2.0/10</td>
+      <td class="name">Rm Yachts</td>
+      <td class="url"><a href="https://www.rm-yachts.com/" target="_blank">rm-yachts.com</a><br><span class="date-maj">01/2026</span></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:0546447300">05 46 44 73 00</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge warn">Semi-actif</span></td>
       <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : WordPress</li><li>1 pages sans meta desc</li><li>1 pages sans H1</li></ul></td>
     </tr>
     <tr>
-      <td class="score-cell" style="background:#388e3c;color:#fff">1.0/10</td>
-      <td class="name">Naval Group</td>
-      <td class="url"><a href="https://www.naval-group.com/" target="_blank">naval-group.com</a></td>
+      <td class="score-cell" style="background:#388e3c;color:#212121">1.5/10</td>
+      <td class="name">Nautitech Catamarans</td>
+      <td class="url"><a href="https://www.nautitechcatamarans.com/" target="_blank">nautitechcatamarans.com</a></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
       <td class="center"><span class="cms">Drupal</span></td>
       <td class="center">10</td>
       <td class="center"><span class="badge ok">Oui</span></td>
-      <td class="center"><span class="badge ok">✓</span></td>
+      <td class="signaux"><ul><li>ratio texte/HTML faible (13%)</li><li>CMS : Drupal</li><li>5 pages sans meta desc</li><li>2 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">1.0/10</td>
+      <td class="name">Survitec Sas</td>
+      <td class="url"><a href="https://survitecgroup.com/" target="_blank">survitecgroup.com</a></td>
+      <td class="url"><a href="mailto:nan">nan</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
+      <td class="signaux"><ul><li>ratio texte/HTML faible (3%)</li><li>CMS : nan</li><li>1 pages sans H1</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">1.0/10</td>
+      <td class="name">Strato Compo</td>
+      <td class="url"><a href="https://www.stratocompo.com/" target="_blank">stratocompo.com</a></td>
+      <td class="url"><a href="mailto:stratocompo@wanadoo.fr">stratocompo@wanadoo.fr</a></td>
+      <td class="url"><a href="tel:0680719400">06 80 71 94 00</a></td>
+      <td class="center"><span class="cms">WordPress</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
+      <td class="signaux"><ul><li>ratio texte/HTML faible (8%)</li><li>CMS : WordPress</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">1.0/10</td>
+      <td class="name">By Paint Service</td>
+      <td class="url"><a href="https://paintslab.com/" target="_blank">paintslab.com</a></td>
+      <td class="url"><a href="mailto:info@paintslab.com">info@paintslab.com</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">Shopify</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
+      <td class="signaux"><ul><li>pas de sitemap</li><li>ratio texte/HTML faible (2%)</li><li>CMS : Shopify</li><li>1 pages sans meta desc</li></ul></td>
+    </tr>
+    <tr>
+      <td class="score-cell" style="background:#388e3c;color:#212121">1.0/10</td>
+      <td class="name">Naval Group</td>
+      <td class="url"><a href="https://www.naval-group.com/" target="_blank">naval-group.com</a></td>
+      <td class="url"><a href="mailto:come.cornuat@naval-group.com">come.cornuat@naval-group.com</a></td>
+      <td class="url"><a href="tel:nan">nan</a></td>
+      <td class="center"><span class="cms">Drupal</span></td>
+      <td class="center">10</td>
+      <td class="center"><span class="badge ok">Oui</span></td>
       <td class="signaux"><ul><li>ratio texte/HTML faible (7%)</li><li>CMS : Drupal</li><li>3 pages sans meta desc</li></ul></td>
     </tr>
 </tbody>
 </table>
-
-<div class="legend">
-  <div class="legend-item"><div class="legend-dot" style="background:#c62828"></div>Score ≥8 — Haute priorité</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#e65100"></div>Score 6–7 — Priorité moyenne</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#f9a825"></div>Score 4–5 — À suivre</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#388e3c"></div>Score &lt;4 — Site correct</div>
-</div>
-<p class="note">Score = opportunité pour une agence web (plus le score est élevé, plus le site a de failles SEO à corriger).<br>
-Sites exclus : anglophones détectés (Dufour Yachts, Néel Trimarans) — hors cible agence française.</p>
 </body>
 </html>
