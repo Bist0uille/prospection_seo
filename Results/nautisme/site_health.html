@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Site Health Check — Prospects Web</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #f5f5f5; color: #212121; padding: 32px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #1a237e; }
+  .header p  { font-size: 13px; color: #757575; margin-top: 4px; }
+
+  .meta { display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; margin-bottom: 22px; }
+  .meta-card {
+    background: #fff; padding: 12px 18px; border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1); min-width: 110px;
+    border-top: 4px solid #ccc; cursor: pointer; transition: box-shadow .15s;
+    user-select: none;
+  }
+  .meta-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.18); }
+  .meta-card.active { box-shadow: 0 0 0 2px #1a237e, 0 3px 10px rgba(0,0,0,.15); }
+  .meta-card .num { font-size: 26px; font-weight: 800; }
+  .meta-card .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #757575; margin-top: 2px; }
+  .meta-card.p1  { border-top-color: #b71c1c; } .meta-card.p1  .num { color: #b71c1c; }
+  .meta-card.p2  { border-top-color: #c62828; } .meta-card.p2  .num { color: #c62828; }
+  .meta-card.p3  { border-top-color: #e65100; } .meta-card.p3  .num { color: #e65100; }
+  .meta-card.p4  { border-top-color: #f9a825; } .meta-card.p4  .num { color: #e65100; }
+  .meta-card.p5  { border-top-color: #1565c0; } .meta-card.p5  .num { color: #1565c0; }
+  .meta-card.pok { border-top-color: #388e3c; } .meta-card.pok .num { color: #388e3c; }
+  .meta-card.all { border-top-color: #757575; } .meta-card.all .num { color: #424242; }
+  .meta-card.pag { border-top-color: #7b1fa2; } .meta-card.pag .num { color: #7b1fa2; }
+
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .filters label { font-size: 12px; color: #555; }
+  .filters input[type=checkbox] { margin-right: 4px; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff;
+           box-shadow: 0 1px 4px rgba(0,0,0,.12); border-radius: 8px; overflow: hidden; }
+  thead th { background: #1a237e; color: #fff; font-size: 10px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: .5px; padding: 11px 12px; text-align: left; }
+  tbody tr { border-bottom: 1px solid #f0f0f0; transition: background .1s; }
+  tbody tr:hover { background: #fafafa; }
+  tbody tr.hidden { display: none; }
+  tbody td { padding: 9px 12px; font-size: 12px; vertical-align: middle; }
+  .name { font-weight: 600; font-size: 13px; }
+  .geo  { font-size: 11px; color: #555; white-space: nowrap; }
+  .dept { display: inline-block; background: #eeeeee; color: #424242;
+           padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 700; margin-left: 3px; }
+  .url a { color: #1565c0; text-decoration: none; font-size: 12px; }
+  .url a:hover { text-decoration: underline; }
+  .center { text-align: center; }
+  .na { color: #bdbdbd; font-size: 11px; }
+  .down-reason { color: #b71c1c; font-size: 11px; }
+  .blog-link { color: #1565c0; text-decoration: none; font-size: 11px; margin-left: 3px; }
+
+  /* Badges signal principal */
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 12px;
+            font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .priority1 { background: #ffcdd2; color: #b71c1c; }
+  .priority2 { background: #ffebee; color: #c62828; }
+  .priority3 { background: #fff3e0; color: #e65100; }
+  .priority4 { background: #fff8e1; color: #f57f17; }
+  .priority5 { background: #e3f2fd; color: #1565c0; }
+  .ok        { background: #e8f5e9; color: #2e7d32; }
+
+  /* Chips inline */
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 10px;
+           font-size: 10px; font-weight: 600; white-space: nowrap; }
+  .chip-ok     { background: #e8f5e9; color: #2e7d32; }
+  .chip-bad    { background: #ffebee; color: #c62828; }
+  .chip-agence { background: #f3e5f5; color: #7b1fa2; max-width: 120px;
+                  overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+  .chip-social { background: #e8eaf6; color: #283593; text-decoration: none; }
+  a.chip-social:hover { background: #c5cae9; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Site Health Check — Prospects Web</h1>
+  <p>Analyse complète · 52 entreprises · signaux commerciaux + techniques</p>
+</div>
+
+<div class="meta">
+  <div class="meta-card all" data-filter="all" data-agence="all">
+    <div class="num">52</div><div class="lbl">Total</div>
+  </div>
+  <div class="meta-card p1" data-filter="pas_de_site" data-agence="all">
+    <div class="num">10</div><div class="lbl">Pas de site</div>
+  </div>
+  <div class="meta-card p2" data-filter="down" data-agence="all">
+    <div class="num">2</div><div class="lbl">Down</div>
+  </div>
+  <div class="meta-card p3" data-filter="lent" data-agence="all">
+    <div class="num">1</div><div class="lbl">Lents</div>
+  </div>
+  <div class="meta-card p4" data-filter="site_ancien" data-agence="all">
+    <div class="num">7</div><div class="lbl">Site ancien</div>
+  </div>
+  <div class="meta-card p5" data-filter="sans_blog" data-agence="all">
+    <div class="num">6</div><div class="lbl">Sans blog</div>
+  </div>
+  <div class="meta-card pok" data-filter="ok" data-agence="all">
+    <div class="num">26</div><div class="lbl">OK</div>
+  </div>
+  <div class="meta-card pag" data-filter="all" data-agence="1">
+    <div class="num">4</div><div class="lbl">Agence en place</div>
+  </div>
+</div>
+
+<div class="filters">
+  <label><input type="checkbox" id="hide-agence"> Masquer les entreprises avec agence en place</label>
+</div>
+
+<table>
+<thead>
+<tr>
+  <th>Signal</th>
+  <th>Entreprise</th>
+  <th>Ville</th>
+  <th>Site web</th>
+  <th>Temps rép.</th>
+  <th>Blog</th>
+  <th>Agence</th>
+  <th>Copyright</th>
+  <th>Réseaux</th>
+  <th>Raison down</th>
+</tr>
+</thead>
+<tbody>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Ateliers Mecaniques Des Pertuis</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Bordeaux Operations Portuaires - Bop</td>
+      <td class="geo">Bordeaux <span class="dept">33</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Construction Navale Bordeaux</td>
+      <td class="geo">Bordeaux <span class="dept">33</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Courmar</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Dragage Transports Et Travaux Maritimes</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Grand Port Maritime De Bordeaux</td>
+      <td class="geo">Bordeaux <span class="dept">33</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Maire Marine Competences</td>
+      <td class="geo">Lege-Cap-Ferret <span class="dept">33</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Regie Du Port D'Arcachon</td>
+      <td class="geo">Arcachon <span class="dept">33</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Societe D'Armement Et De Transport</td>
+      <td class="geo">Bordeaux <span class="dept">33</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="pas_de_site" data-agence="0">
+      <td class="center"><span class="badge priority1">Pas de site</span></td>
+      <td class="name">Ste Fernand Herve Sarl</td>
+      <td class="geo">Perigny <span class="dept">17</span></td>
+      <td class="url"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="down" data-agence="0">
+      <td class="center"><span class="badge priority2">Down</span></td>
+      <td class="name">Msc - Mediterranean Shipping Company France</td>
+      <td class="geo">Merignac <span class="dept">33</span></td>
+      <td class="url"><a href="https://www.msc.com/" target="_blank">msc.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">208 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="down-reason">HTTP 403</span></td>
+    </tr>
+
+    <tr data-signal="down" data-agence="0">
+      <td class="center"><span class="badge priority2">Down</span></td>
+      <td class="name">Societe De Lamanage Du Port De Bordeaux "Entreprise Maritime"</td>
+      <td class="geo">Lormont <span class="dept">33</span></td>
+      <td class="url"><a href="http://www.convention-entreprise.fr/" target="_blank">convention-entreprise.fr</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="down-reason">Connexion impossible (DNS/refusée)</span></td>
+    </tr>
+
+    <tr data-signal="lent" data-agence="0">
+      <td class="center"><span class="badge priority3">Lent</span></td>
+      <td class="name">Naviteam</td>
+      <td class="geo">Bordeaux <span class="dept">33</span></td>
+      <td class="url"><a href="https://naviteam.eu/" target="_blank">naviteam.eu</a></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">3477 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://naviteam.eu/en/news/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2026</span></td>
+      <td class="center"><a href="https://pl-pl.facebook.com/SCSnawigacje/" target="_blank" class="chip chip-social">Facebook</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Alternatives Energies</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.alternativesenergies.com/" target="_blank">alternativesenergies.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">822 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.alternativesenergies.com/actualites-alternatives-energies/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2020</span> <span class="chip chip-bad" style="font-size:10px">6 ans</span></td>
+      <td class="center"><a href="https://www.linkedin.com/company/alternatives-energies-la-rochelle/" target="_blank" class="chip chip-social">LinkedIn</a> <a href="https://twitter.com/Alternatives_EN" target="_blank" class="chip chip-social">Twitter</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Lamanage Et Services Maritimes Des Ports De La Rochelle - Charente</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://lamanage-syndicatpro.fr/" target="_blank">lamanage-syndicatpro.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1243 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://lamanage-syndicatpro.fr/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2024</span> <span class="chip chip-bad" style="font-size:10px">2 ans</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Naval Group</td>
+      <td class="geo">Ruelle-Sur-Touvre <span class="dept">16</span></td>
+      <td class="url"><a href="https://www.naval-group.com/" target="_blank">naval-group.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">889 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/fr/actualites-0" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2020</span> <span class="chip chip-bad" style="font-size:10px">6 ans</span></td>
+      <td class="center"><a href="https://fr.linkedin.com/company/naval-group" target="_blank" class="chip chip-social">LinkedIn</a> <a href="https://twitter.com/navalgroup" target="_blank" class="chip chip-social">Twitter</a> <a href="https://www.instagram.com/navalgroup/?hl=fr" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/user/DCNSgroup" target="_blank" class="chip chip-social">YouTube</a> <a href="https://www.facebook.com/navalgroup/" target="_blank" class="chip chip-social">Facebook</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Rc Marine La Rochelle</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.rc-marine.fr/" target="_blank">rc-marine.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">513 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/fr/actualites" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2022</span> <span class="chip chip-bad" style="font-size:10px">4 ans</span></td>
+      <td class="center"><a href="https://www.facebook.com/rcmarinebeneteau/" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/rcmarine_/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/channel/UCjf-PQNWIedWRaMDgYDFMMg" target="_blank" class="chip chip-social">YouTube</a> <a href="https://www.linkedin.com/company/20491310/" target="_blank" class="chip chip-social">LinkedIn</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Rotomod</td>
+      <td class="geo">Bon-Encontre <span class="dept">47</span></td>
+      <td class="url"><a href="https://www.rotomod-design.com/" target="_blank">rotomod-design.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">270 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2020</span> <span class="chip chip-bad" style="font-size:10px">6 ans</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Sea Invest Shipping Agency</td>
+      <td class="geo">Bassens <span class="dept">33</span></td>
+      <td class="url"><a href="https://sea-invest.com/" target="_blank">sea-invest.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">345 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://sea-invest.com/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2019</span> <span class="chip chip-bad" style="font-size:10px">7 ans</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="site_ancien" data-agence="0">
+      <td class="center"><span class="badge priority4">Site ancien</span></td>
+      <td class="name">Syndicat Professionnel Des Pilotes Maritimes</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://lamanage-syndicatpro.fr/" target="_blank">lamanage-syndicatpro.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1330 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://lamanage-syndicatpro.fr/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#c62828;font-weight:600">© 2024</span> <span class="chip chip-bad" style="font-size:10px">2 ans</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="sans_blog" data-agence="0">
+      <td class="center"><span class="badge priority5">Sans blog</span></td>
+      <td class="name">Chantier Nautique Du Vieux Port</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://chantiernautiqueduvieuxport.com/" target="_blank">chantiernautiqueduvieuxport.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">430 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.facebook.com/profile.php?id=61551806282946" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/chantiernautiqueduvieuxport/?hl=fr" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.linkedin.com/company/cnvp/" target="_blank" class="chip chip-social">LinkedIn</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="sans_blog" data-agence="0">
+      <td class="center"><span class="badge priority5">Sans blog</span></td>
+      <td class="name">Croisieres Inter-Iles</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.inter-iles.com/" target="_blank">inter-iles.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">357 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.instagram.com/compagnie.interiles/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.facebook.com/compagnieinteriles" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.linkedin.com/company/compagnie-interiles" target="_blank" class="chip chip-social">LinkedIn</a> <a href="https://www.tiktok.com/@compagnie.interiles" target="_blank" class="chip chip-social">TikTok</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="sans_blog" data-agence="0">
+      <td class="center"><span class="badge priority5">Sans blog</span></td>
+      <td class="name">Dufour Yachts</td>
+      <td class="geo">Perigny <span class="dept">17</span></td>
+      <td class="url"><a href="http://dufour-yachts.fr/" target="_blank">dufour-yachts.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">182 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="sans_blog" data-agence="0">
+      <td class="center"><span class="badge priority5">Sans blog</span></td>
+      <td class="name">Pilotage De La Gironde</td>
+      <td class="geo">Bassens <span class="dept">33</span></td>
+      <td class="url"><a href="https://pilotagegironde.com/" target="_blank">pilotagegironde.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">733 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="sans_blog" data-agence="1">
+      <td class="center"><span class="badge priority5">Sans blog</span></td>
+      <td class="name">Nautic Elec - Gulf Stream</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.nautic-elec.com/" target="_blank">nautic-elec.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">331 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="chip chip-agence" title="Vitamine">Vitamine</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2026</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="sans_blog" data-agence="1">
+      <td class="center"><span class="badge priority5">Sans blog</span></td>
+      <td class="name">Ocea</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.ocea.fr/" target="_blank">ocea.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">304 ms</span></td>
+      <td class="center"><span class="chip chip-bad">Non</span></td>
+      <td class="center"><span class="chip chip-agence" title="Images Cr">Images Cr</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Ap Yacht Conception</td>
+      <td class="geo">Marans <span class="dept">17</span></td>
+      <td class="url"><a href="https://ap-yachting.fr/" target="_blank">ap-yachting.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">487 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://ap-yachting.fr/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2026</span></td>
+      <td class="center"><a href="https://www.instagram.com/apyachting/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.facebook.com/AP-Yachting-104325522155126" target="_blank" class="chip chip-social">Facebook</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Atlantique Sellerie Christian Costes</td>
+      <td class="geo">Chatelaillon-Plage <span class="dept">17</span></td>
+      <td class="url"><a href="http://atlantiquesellerie.com/" target="_blank">atlantiquesellerie.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1117 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="http://atlantiquesellerie.com/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">B2 Marine</td>
+      <td class="geo">Latresne <span class="dept">33</span></td>
+      <td class="url"><a href="https://www.b2marine.fr/" target="_blank">b2marine.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">343 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/fr/presse" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2025</span></td>
+      <td class="center"><a href="https://www.facebook.com/B2-Marine-283401292287216/?eid=ARC_GiZjPb-TydmxtBoTP2cXQ3P_XUB3-mlxY0f1Q7QyR2F5uWzrg5R91uWd3u6D6bDuiM_hCeHjXx41&hc_ref=ARS1UltyS74kEnN-c9K6PIm_-bxr3EBRzfOuknKcbz5B-CpZdm8AInU9GFQ_YaCOf3A&__xts__[0]=68.ARDWFFfkZasnhykTsqubS7KCZuTQ6N3Ieyipsr5unzwpKZjdIzHPuZLocuJc2JFge2AHzDdLcug6gXvhYR0OQ_4niarqX7d90gDOVRzkP-nh8lLPSZkKyeCrxxv8z3P0c23rK0Z_itOKXXROBD6cu96spVTbO5zf6IHH-XFu5d-HRi42GMILx7ot1aMydI8frEaiPqSQXDADq_CFv4crCVazWo-idTs9Xoa1gBKyxbpI8R8IembRT2U0M5gZ4yq0wDBkpCgIeLeHLaAxyO00AJ1sdHRPougn" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/b2_marine/?hl=fr" target="_blank" class="chip chip-social">Instagram</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">By Paint Service</td>
+      <td class="geo">Saint Vincent De Paul <span class="dept">33</span></td>
+      <td class="url"><a href="https://paintslab.com/" target="_blank">paintslab.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1151 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/blogs/news" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.instagram.com/paints_lab/" target="_blank" class="chip chip-social">Instagram</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">C3 Technologies</td>
+      <td class="geo">Perigny <span class="dept">17</span></td>
+      <td class="url"><a href="http://www.c3technologies.fr/" target="_blank">c3technologies.fr</a></td>
+      <td class="center"><span style="color:#e65100;font-weight:600">2342 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="http://www.c3technologies.fr/actualites/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.facebook.com/c3technologiesSARL/#" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.linkedin.com/company/c3-technologies-sarl" target="_blank" class="chip chip-social">LinkedIn</a> <a href="https://twitter.com/C3Technologies_" target="_blank" class="chip chip-social">Twitter</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Chantier Naval Couach - Cnc</td>
+      <td class="geo">Gujan-Mestras <span class="dept">33</span></td>
+      <td class="url"><a href="https://couach.com/" target="_blank">couach.com</a></td>
+      <td class="center"><span style="color:#e65100;font-weight:600">1993 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://couach.com/fr/actualites-professionnel/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://fr-fr.facebook.com/CouachYachtsOfficiel/" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/couachyachtsofficial/" target="_blank" class="chip chip-social">Instagram</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Chantier Naval Des Minimes</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://chantier-naval-minimes.com/" target="_blank">chantier-naval-minimes.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">263 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://chantier-naval-minimes.com/actualites-du-chantier/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.nautix.com/" target="_blank" class="chip chip-social">X</a> <a href="https://www.facebook.com/cnminimes17/" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/cnminimes/?hl=fr" target="_blank" class="chip chip-social">Instagram</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Dubourdieu 1800</td>
+      <td class="geo">Gujan-Mestras <span class="dept">33</span></td>
+      <td class="url"><a href="https://www.dubourdieu.fr/" target="_blank">dubourdieu.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">673 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.dubourdieu.fr/press/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.instagram.com/dubourdieu_boats_official/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://twitter.com/bm_dubourdieu" target="_blank" class="chip chip-social">Twitter</a> <a href="https://www.facebook.com/dubourdieu1800/" target="_blank" class="chip chip-social">Facebook</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Exel Yachting</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.exel-industries.com/" target="_blank">exel-industries.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1060 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/publications-financieres/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2026</span></td>
+      <td class="center"><a href="https://www.linkedin.com/company/exel-industries/" target="_blank" class="chip chip-social">LinkedIn</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Fountaine Pajot</td>
+      <td class="geo">Aigrefeuille D'Aunis <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.fountaine-pajot.com/" target="_blank">fountaine-pajot.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">513 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.fountaine-pajot.com/newsroom/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Grand Port Maritime De La Rochelle</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.larochelle.port.fr/" target="_blank">larochelle.port.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">464 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.larochelle.port.fr/nos-engagements/ressources-humaines/nous-rejoindre/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.instagram.com/portatlantiquelarochelle/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/channel/UCtrn4i00VaGPCJyl-UeShUw" target="_blank" class="chip chip-social">YouTube</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Nautitech Catamarans</td>
+      <td class="geo">Rochefort <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.nautitechcatamarans.com/" target="_blank">nautitechcatamarans.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">940 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/fr/actualites-et-evenements.html" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://fr-fr.facebook.com/NautitechCat/" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/nautitechcatamarans/?hl=fr" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/channel/UCpMJzXi5EZvMjPF6FdnYeGQ" target="_blank" class="chip chip-social">YouTube</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Neel Trimarans</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.neel-trimarans.com/" target="_blank">neel-trimarans.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1266 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.neel-trimarans.com/news-and-reviews/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.facebook.com/neeltrimarans/" target="_blank" class="chip chip-social">Facebook</a> <a href="https://twitter.com/neeltrimarans" target="_blank" class="chip chip-social">Twitter</a> <a href="https://www.instagram.com/neeltrimarans_official/?hl=fr" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/channel/UCAFnRZZiNuug-k9TNDH_sEw" target="_blank" class="chip chip-social">YouTube</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Pinball Boat</td>
+      <td class="geo">Le Chateau D'Oleron <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.pinball-boat.com/" target="_blank">pinball-boat.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">424 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/fr/actualites" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Rm Yachts</td>
+      <td class="geo">Perigny <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.rm-yachts.com/" target="_blank">rm-yachts.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1097 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.rm-yachts.com/newsletter-rm-yachts/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.facebook.com/rmyachts" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/rmyachts/?hl=fr" target="_blank" class="chip chip-social">Instagram</a> <a href="https://twitter.com/RMYachts" target="_blank" class="chip chip-social">Twitter</a> <a href="https://www.youtube.com/channel/UCKtuvSWdze68UqiXwID-DLg/videos" target="_blank" class="chip chip-social">YouTube</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Sa Chantiers Amel</td>
+      <td class="geo">Perigny <span class="dept">17</span></td>
+      <td class="url"><a href="https://amel.fr/" target="_blank">amel.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">994 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://amel.fr/actualites/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2025</span></td>
+      <td class="center"><a href="https://www.facebook.com/AmelYachts" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/amelyachts/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/channel/UCYAbSsQcVxNKUHZyBOtCx2Q" target="_blank" class="chip chip-social">YouTube</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Sarl Lecamus</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.lecamus.com/" target="_blank">lecamus.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">429 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.lecamus.com/actualitésimocahumanebac" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Sealver</td>
+      <td class="geo">Sanguinet <span class="dept">40</span></td>
+      <td class="url"><a href="https://sealver.com/" target="_blank">sealver.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">265 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://sealver.com/press-articles-news-sealver-waveboat/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.facebook.com/sealver.waveboat/" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/sealver_waveboat/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://www.youtube.com/c/sealverwaveboat" target="_blank" class="chip chip-social">YouTube</a> <a href="https://fr.linkedin.com/company/sealver" target="_blank" class="chip chip-social">LinkedIn</a> <a href="https://twitter.com/Sealverwaveboat" target="_blank" class="chip chip-social">Twitter</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Societe Fouras Aix</td>
+      <td class="geo">Ile-D'Aix <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.liaison-maritime-fouras-aix.com/" target="_blank">liaison-maritime-fouras-aix.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">507 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.liaison-maritime-fouras-aix.com/blog/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.facebook.com/profile.php?id=61570848885762" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/liaison_maritime_fouras_aix/" target="_blank" class="chip chip-social">Instagram</a> <a href="https://x.com/FourasAix" target="_blank" class="chip chip-social">X</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Spl D Exploitation Du Port Departemental De Saint-Jean-De-Luz-Ciboure</td>
+      <td class="geo">Ciboure <span class="dept">64</span></td>
+      <td class="url"><a href="https://www.port-saintjeandeluz-ciboure.com/" target="_blank">port-saintjeandeluz-ciboure.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">229 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.port-saintjeandeluz-ciboure.com/actualites/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Strato Compo</td>
+      <td class="geo">Grayan-Et-L'Hopital <span class="dept">33</span></td>
+      <td class="url"><a href="https://www.stratocompo.com/" target="_blank">stratocompo.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">298 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/actualites-composites/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2026</span></td>
+      <td class="center"><a href="https://www.facebook.com/STRATO-COMPO-stratifi%C3%A9s-composites-369798103155649/" target="_blank" class="chip chip-social">Facebook</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Survitec Sas</td>
+      <td class="geo">Chevanceaux <span class="dept">17</span></td>
+      <td class="url"><a href="https://survitecgroup.com/" target="_blank">survitecgroup.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">508 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="/media/news" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">© 2026</span></td>
+      <td class="center"><a href="https://www.facebook.com/Survitec" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.linkedin.com/company/survitec" target="_blank" class="chip chip-social">LinkedIn</a> <a href="https://www.youtube.com/@SurvitecChannel" target="_blank" class="chip chip-social">YouTube</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Teck Inox</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.teck-inox.com/" target="_blank">teck-inox.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">1038 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.teck-inox.com/blog/" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.teck-inox.com/" target="_blank" class="chip chip-social">X</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="0">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Uchimata Services</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://uchimata-shop.fr/" target="_blank">uchimata-shop.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">801 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://uchimata-shop.fr/blog.html" target="_blank">↗</a></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="1">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Boluda La Rochelle</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://boluda.fr/" target="_blank">boluda.fr</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">666 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://boluda.fr/media" target="_blank">↗</a></td>
+      <td class="center"><span class="chip chip-agence" title="Exprimer Bienvenue Société Nos services Flotte QHS">Exprimer Bienvenue Société N</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+
+    <tr data-signal="ok" data-agence="1">
+      <td class="center"><span class="badge ok">OK</span></td>
+      <td class="name">Grassi Bateaux Sarl</td>
+      <td class="geo">La Rochelle <span class="dept">17</span></td>
+      <td class="url"><a href="https://www.grassibateaux.com/" target="_blank">grassibateaux.com</a></td>
+      <td class="center"><span style="color:#388e3c;font-weight:600">597 ms</span></td>
+      <td class="center"><span class="chip chip-ok">Oui</span> <a class="blog-link" href="https://www.grassibateaux.com/actualites/" target="_blank">↗</a></td>
+      <td class="center"><span class="chip chip-agence" title="La Petite Boite">La Petite Boite</span></td>
+      <td class="center"><span class="na">—</span></td>
+      <td class="center"><a href="https://www.grassibateaux.com" target="_blank" class="chip chip-social">X</a> <a href="https://www.facebook.com/grassi.bateaux" target="_blank" class="chip chip-social">Facebook</a> <a href="https://www.instagram.com/grassibateaux17000" target="_blank" class="chip chip-social">Instagram</a></td>
+      <td class="center"><span class="na">—</span></td>
+    </tr>
+</tbody>
+</table>
+
+<script>
+  const cards    = document.querySelectorAll('.meta-card');
+  const rows     = document.querySelectorAll('tbody tr');
+  const hideBox  = document.getElementById('hide-agence');
+
+  let activeFilter = 'all';
+  let hideAgence   = false;
+
+  function applyFilters() {
+    rows.forEach(row => {
+      const signalMatch = activeFilter === 'all' || row.dataset.signal === activeFilter;
+      const agenceMatch = !hideAgence || row.dataset.agence !== '1';
+      row.classList.toggle('hidden', !(signalMatch && agenceMatch));
+    });
+  }
+
+  cards.forEach(card => {
+    card.addEventListener('click', () => {
+      cards.forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      const agenceFilter = card.dataset.agence;
+      if (agenceFilter === '1') {
+        activeFilter = 'all';
+        hideAgence = false;
+        hideBox.checked = false;
+        // Show only agence rows
+        rows.forEach(row => {
+          row.classList.toggle('hidden', row.dataset.agence !== '1');
+        });
+        return;
+      }
+      activeFilter = card.dataset.filter;
+      applyFilters();
+    });
+  });
+
+  hideBox.addEventListener('change', () => {
+    hideAgence = hideBox.checked;
+    applyFilters();
+  });
+
+  document.querySelector('.meta-card.all').classList.add('active');
+</script>
+</body>
+</html>

@@ -175,7 +175,7 @@ def _verify_url(url: str, timeout: int = 6) -> bool:
         return False
 
 
-def _ddgs_search(query: str, max_results: int = 5) -> list[dict]:
+def _ddgs_search(query: str, max_results: int = 10) -> list[dict]:
     """Run a DDG text search and return results list."""
     from ddgs import DDGS
     return list(DDGS().text(query, max_results=max_results))
@@ -274,16 +274,24 @@ def get_website_with_ddgs(denomination: str) -> tuple[str, str | None, int | Non
         ]
 
         # ── Pass 1 : "<denomination> fr" ────────────────────────────────────
-        results = _ddgs_search(f"{denomination} fr", max_results=5)
+        results = _ddgs_search(f"{denomination} fr")
         logger.debug("Pass 1 — %d results", len(results))
         candidates = _pick_best_candidate(results, keywords)
 
-        # ── Pass 2 : fallback with "nautisme" ────────────────────────────────
+        # ── Pass 2 : "site officiel" — remonte le vrai site d'entreprise ─────
+        # DDG rankera davantage le site propre qu'un annuaire pour cette requête.
         if not candidates:
-            logger.info("No match in pass 1 — retrying with 'nautisme' keyword.")
-            results2 = _ddgs_search(f"{denomination} nautisme", max_results=5)
+            logger.info("No match in pass 1 — retrying with 'site officiel'.")
+            results2 = _ddgs_search(f"{denomination} site officiel")
             logger.debug("Pass 2 — %d results", len(results2))
             candidates = _pick_best_candidate(results2, keywords)
+
+        # ── Pass 3 : fallback with "nautisme" ────────────────────────────────
+        if not candidates:
+            logger.info("No match in pass 2 — retrying with 'nautisme' keyword.")
+            results3 = _ddgs_search(f"{denomination} nautisme")
+            logger.debug("Pass 3 — %d results", len(results3))
+            candidates = _pick_best_candidate(results3, keywords)
 
         # ── Verify accessibility (first accessible candidate wins) ────────────
         for best_priority, best_rank, best_url in candidates:
