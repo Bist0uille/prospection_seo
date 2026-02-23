@@ -362,28 +362,20 @@ def check_site(url: str, slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS) -> 
 def _classify(check: dict | None) -> tuple[str, float]:
     """Retourne (signal, priorite_score) pour le tri.
 
-    priorite_score = priorite_base + 0.5 si agence_detectee
-    → les entreprises déjà suivies par une agence descendent légèrement
-      dans chaque catégorie.
+    L'agence détectée n'influe plus sur le score — info uniquement.
     """
     if check is None:
         return "pas_de_site", float(PRIORITY["pas_de_site"])
 
-    agence_bump = 0.5 if check.get("agence_detectee") else 0.0
-
     if check["is_down"]:
-        return "down", PRIORITY["down"] + agence_bump
+        return "down", float(PRIORITY["down"])
     if check["is_slow"]:
-        return "lent", PRIORITY["lent"] + agence_bump
-    if check.get("site_ancien") and not check["has_blog"]:
-        # Site ancien sans blog = double signal commercial fort
-        return "site_ancien", PRIORITY["site_ancien"] + agence_bump
+        return "lent", float(PRIORITY["lent"])
     if check.get("site_ancien"):
-        # Site ancien mais avec blog : traiter comme "site_ancien" quand même
-        return "site_ancien", PRIORITY["site_ancien"] + agence_bump
+        return "site_ancien", float(PRIORITY["site_ancien"])
     if not check["has_blog"]:
-        return "sans_blog", PRIORITY["sans_blog"] + agence_bump
-    return "ok", PRIORITY["ok"] + agence_bump
+        return "sans_blog", float(PRIORITY["sans_blog"])
+    return "ok", float(PRIORITY["ok"])
 
 
 # ============================================================================
