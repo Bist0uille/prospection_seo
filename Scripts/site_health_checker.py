@@ -146,7 +146,7 @@ def filter_by_departements(df: pd.DataFrame, departements: list[str]) -> pd.Data
 # COMMERCIAL SIGNAL DETECTORS  (opèrent sur BeautifulSoup + html brut)
 # ============================================================================
 
-def _detect_agency(soup: BeautifulSoup, html: str) -> tuple[bool, str | None]:
+def _detect_agency(soup: BeautifulSoup, html: str) -> tuple[bool, str | None, str | None]:
     """Détecte si le site mentionne une agence web créatrice.
 
     Recherche dans :
@@ -155,7 +155,7 @@ def _detect_agency(soup: BeautifulSoup, html: str) -> tuple[bool, str | None]:
     3. Liens sortants dont le domaine/texte évoque une agence
 
     Returns:
-        (agence_detectee, nom_agence_ou_None)
+        (agence_detectee, nom_agence_ou_None, url_agence_ou_None)
     """
     # ── Zone footer ───────────────────────────────────────────────────────────
     footer_el = soup.find("footer")
@@ -188,7 +188,7 @@ def _detect_agency(soup: BeautifulSoup, html: str) -> tuple[bool, str | None]:
                     logger.debug("Agency false positive skipped: '%s'", name)
                     continue
                 logger.debug("Agency detected via text pattern: '%s'", name)
-                return True, name
+                return True, name, None
 
     # ── Liens sortants suspects dans le footer ────────────────────────────────
     check_el = footer_el or soup
@@ -198,12 +198,18 @@ def _detect_agency(soup: BeautifulSoup, html: str) -> tuple[bool, str | None]:
         if any(kw in href or kw in atext for kw in _AGENCY_LINK_KEYWORDS):
             # Exclure les liens vers soi-même et les liens de contact génériques
             if "contact" not in href and "mailto" not in href:
-                domain = urlparse(a["href"]).netloc.replace("www.", "")
+                raw_href = a["href"]
+                agency_url = (
+                    raw_href if raw_href.startswith("http")
+                    else f"https:{raw_href}" if raw_href.startswith("//")
+                    else None
+                )
+                domain = urlparse(raw_href).netloc.replace("www.", "")
                 name   = a.get_text(strip=True) or domain
-                logger.debug("Agency detected via footer link: '%s' (%s)", name, href)
-                return True, name[:60] if name else None
+                logger.debug("Agency detected via footer link: '%s' (%s)", name, raw_href)
+                return True, name[:60] if name else None, agency_url
 
-    return False, None
+    return False, None, None
 
 
 def _detect_copyright_year(soup: BeautifulSoup, html: str) -> int | None:
@@ -261,6 +267,7 @@ def check_site(url: str, slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS) -> 
         # ── commercial ──────────────────────────────────────
         "agence_detectee":   False,
         "agence_nom":        None,
+        "agence_url":        None,
         "annee_copyright":   None,
         "site_ancien":       False,
         "reseaux_sociaux":   "",
@@ -313,9 +320,10 @@ def check_site(url: str, slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS) -> 
             result["blog_url"] = url
 
         # ── Agence ────────────────────────────────────────────────────────────
-        agence, nom = _detect_agency(soup, html)
+        agence, nom, agence_url = _detect_agency(soup, html)
         result["agence_detectee"] = agence
         result["agence_nom"]      = nom
+        result["agence_url"]      = agence_url
 
         # ── Ancienneté (copyright) ────────────────────────────────────────────
         year = _detect_copyright_year(soup, html)
@@ -430,6 +438,7 @@ def run_health_check(
             "blog_url":         None,
             "agence_detectee":  False,
             "agence_nom":       None,
+            "agence_url":       None,
             "annee_copyright":  None,
             "site_ancien":      False,
             "reseaux_sociaux":  "",
@@ -470,6 +479,7 @@ def run_health_check(
             "blog_url":         check["blog_url"],
             "agence_detectee":  check["agence_detectee"],
             "agence_nom":       check["agence_nom"],
+            "agence_url":       check["agence_url"],
             "annee_copyright":  check["annee_copyright"],
             "site_ancien":      check["site_ancien"],
             "reseaux_sociaux":  check["reseaux_sociaux"],
@@ -541,6 +551,7 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
         domain          = urlparse(site).netloc.replace("www.", "") if site else ""
         agence_det      = bool(row.get("agence_detectee"))
         agence_nom      = str(row.get("agence_nom") or "").strip()
+        agence_url      = str(row.get("agence_url") or "").strip()
         annee_copy      = row.get("annee_copyright")
         reseaux         = str(row.get("reseaux_sociaux") or "").strip()
 
@@ -581,7 +592,10 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
         # Agence
         if agence_det:
             ag_label = agence_nom[:28] if agence_nom and agence_nom not in ("nan", "None") else "Oui"
-            agence_td = f'<span class="chip chip-agence" title="{agence_nom}">{ag_label}</span>'
+            if agence_url and agence_url not in ("nan", "None"):
+                agence_td = f'<a href="{agence_url}" target="_blank" class="chip chip-agence" title="{agence_nom}">{ag_label} ↗</a>'
+            else:
+                agence_td = f'<span class="chip chip-agence" title="{agence_nom}">{ag_label}</span>'
         else:
             agence_td = '<span class="na">—</span>'
 
@@ -699,8 +713,10 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
            font-size: 10px; font-weight: 600; white-space: nowrap; }}
   .chip-ok     {{ background: #e8f5e9; color: #2e7d32; }}
   .chip-bad    {{ background: #ffebee; color: #c62828; }}
-  .chip-agence {{ background: #f3e5f5; color: #7b1fa2; max-width: 120px;
-                  overflow: hidden; text-overflow: ellipsis; display: inline-block; }}
+  .chip-agence {{ background: #f3e5f5; color: #7b1fa2; max-width: 140px;
+                  overflow: hidden; text-overflow: ellipsis; display: inline-block;
+                  text-decoration: none; }}
+  a.chip-agence:hover {{ background: #e1bee7; }}
   .chip-social {{ background: #e8eaf6; color: #283593; text-decoration: none; }}
   a.chip-social:hover {{ background: #c5cae9; text-decoration: none; }}
 </style>
