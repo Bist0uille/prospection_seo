@@ -67,6 +67,7 @@ Matching : keyword ≥ 4 chars du nom d'entreprise doit apparaître dans le doma
 
 ## Conventions
 
+- **Mettre à jour README.md avant chaque commit** si des scripts, options CLI, signaux ou comportements ont changé
 - Ne pas modifier les scripts du pipeline principal pour ajouter des fonctionnalités standalone
 - Résultats toujours dans `Results/{secteur}/`
 - Logs dans `Logs/`
