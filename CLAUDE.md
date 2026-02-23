@@ -74,3 +74,49 @@ Matching : keyword ≥ 4 chars du nom d'entreprise doit apparaître dans le doma
 - Logs dans `Logs/`
 - Venv WSL : `.venv_wsl/` (ignoré git)
 - Dépôt GitHub : `github.com/Bist0uille/prospection_seo`
+
+## Format des commits
+
+Préfixes obligatoires :
+
+| Préfixe | Usage |
+|---------|-------|
+| `feat:` | Nouvelle fonctionnalité |
+| `fix:` | Correction de bug |
+| `docs:` | README, CLAUDE.md, commentaires |
+| `refacto:` | Refactoring sans changement de comportement |
+| `data:` | Modification de fichiers Results/ ou DataBase/ |
+| `chore:` | Dépendances, config, .gitignore |
+
+## Tests
+
+```bash
+source .venv_wsl/bin/activate
+python -m pytest tests/ -q         # tous les tests (162 actuellement)
+python -m pytest tests/ -q -k seo  # filtrer par nom
+```
+
+**Lancer les tests avant chaque commit** sur les scripts du pipeline principal (`find_websites.py`, `seo_auditor.py`, `prospect_analyzer.py`). `site_health_checker.py` n'est pas encore couvert.
+
+## Bugs connus / limites
+
+- **x.com faux positif réseaux sociaux** : le pattern `x.com` matche des domaines qui contiennent cette chaîne (ex: `nautix.com`). Corriger avec une validation stricte du domaine.
+- **Détection agence trop large** : "Boluda" et "Images Cr" (OCEA) sont détectés comme agence alors que c'est du texte de nav/menu. La liste `_AGENCY_FALSE_POSITIVES` ne suffit pas pour ces cas — il faudrait restreindre la zone de recherche au vrai footer uniquement.
+- **13 entreprises sans site (faux négatifs DDG)** : même avec les 3 passes et max_results=10, certaines entreprises ont un site non trouvé. Piste : ajouter une passe avec le SIREN en query.
+
+## Décisions d'architecture
+
+- **site_health_checker.py est standalone** : ne dépend pas du pipeline, repart directement de `filtered_companies_websites.csv`. Raison : éviter de coupler la qualification commerciale au pipeline SEO.
+- **Health checker repart de la base SIRENE complète** : inclut les "NON TROUVÉ" — le signal `pas_de_site` est le plus fort commercialement.
+- **Score priorité flottant** : `priorite_base + 0.5` si agence détectée, plutôt qu'un nouveau niveau de priorité, pour garder la lisibilité du classement.
+- **Pas de navigateur** : toute la stack utilise `requests` + `ddgs`. Selenium a été abandonné pour des raisons de stabilité et de portabilité WSL.
+
+## Versionnement des fichiers Results/
+
+| Fichier | Versionner ? | Raison |
+|---------|-------------|--------|
+| `filtered_companies.csv` | Non | Généré automatiquement |
+| `filtered_companies_websites.csv` | **Oui** | Contient des corrections manuelles d'URLs |
+| `final_prospect_report.csv` | Non | Généré automatiquement |
+| `site_health.csv` | Non | Généré automatiquement |
+| `site_health.html` | Non | Généré automatiquement |
