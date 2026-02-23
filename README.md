@@ -48,6 +48,50 @@ Les secteurs sont définis dans `Sectors/` — un fichier `.txt` par secteur, un
 Secteurs inclus : `nautisme`, `architectes`, `immobilier`, `restaurants`.
 Copier `Sectors/template.txt` pour créer un nouveau secteur.
 
+## Health Checker (site_health_checker.py)
+
+Script standalone de qualification commerciale — indépendant du pipeline principal.
+
+```bash
+python Scripts/site_health_checker.py \
+  --departements 17,33,16,40,47,64 \
+  --output Results/nautisme/site_health
+```
+
+Classifie **toutes** les entreprises (avec ou sans site trouvé) par ordre de priorité :
+
+| Priorité | Signal | Description |
+|----------|--------|-------------|
+| 1 | `pas_de_site` | Aucun site web trouvé — opportunité maximale |
+| 2 | `down` | Site inaccessible (erreur HTTP, DNS, timeout) |
+| 3 | `lent` | Temps de réponse > 3 s |
+| 4 | `site_ancien` | Copyright > 2 ans |
+| 5 | `sans_blog` | Site up mais aucun blog détecté |
+| 6 | `ok` | Pas d'opportunité évidente |
+
+Les sites gérés par une agence reçoivent un **bonus +0.5** sur leur score (descendent dans leur catégorie).
+
+### Signaux additionnels
+
+- **Agence détectée** : analyse footer, commentaires HTML, liens footer (avec liste de faux positifs : Complianz, WordPress, Elementor…)
+- **Copyright** : extraction de l'année pour détecter les sites anciens
+- **Réseaux sociaux** : liens cliquables vers Facebook, Instagram, LinkedIn, YouTube, TikTok, X…
+
+### Options CLI
+
+```
+--departements D      Codes départements à inclure, ex. 17,33,16 (défaut : tous)
+--slow-threshold MS   Seuil de lenteur en ms (défaut : 3000)
+--output PATH         Préfixe de sortie sans extension (génère .csv et .html)
+```
+
+### Sorties
+
+- `site_health.csv` — données brutes, une ligne par entreprise
+- `site_health.html` — rapport filtrable (filtre par signal, masquer agences en place)
+
+---
+
 ## Validation des sites (étape 2)
 
 La recherche DDG retourne l'URL racine du domaine (chemins ignorés) et applique les filtres suivants :
@@ -55,7 +99,7 @@ La recherche DDG retourne l'URL racine du domaine (chemins ignorés) et applique
 - **TLD `.ca`** rejeté (domaines canadiens)
 - **Matching keyword** : le domaine doit contenir au moins un mot-clé significatif (≥ 4 caractères) issu du nom de l'entreprise
 - **Préférence `.fr`** : en cas de plusieurs candidats valides, les domaines `.fr` sont prioritaires
-- **Fallback "nautisme"** : si aucun résultat pertinent, la recherche est relancée avec le mot-clé secteur
+- **3 passes de recherche** : `{denomination}` → `{denomination} site officiel` → `{denomination} nautisme`
 
 ## Audit SEO (seo_auditor.py)
 
@@ -119,6 +163,7 @@ Score de 1 à 10 mesurant la **probabilité de deal**, pas la qualité SEO acad�
 │   ├── find_websites.py          # Recherche sites web via API ddgs / DuckDuckGo
 │   ├── seo_auditor.py            # Audit SEO par crawl BFS léger
 │   ├── prospect_analyzer.py      # Filtrage, vérification, scoring
+│   ├── site_health_checker.py    # Health check standalone (down/lent/agence/blog/réseaux)
 │   └── core/                     # Infrastructure partagée (logging, modèles Pydantic)
 │
 ├── Sectors/
@@ -134,7 +179,9 @@ Score de 1 à 10 mesurant la **probabilité de deal**, pas la qualité SEO acad�
 │
 ├── Results/
 │   └── {secteur}/
-│       └── final_prospect_report.csv   # Rapport final par secteur
+│       ├── final_prospect_report.csv   # Rapport final par secteur
+│       ├── site_health.csv             # Résultats health checker
+│       └── site_health.html            # Rapport HTML filtrable
 │
 ├── requirements.txt
 └── .gitignore
