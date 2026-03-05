@@ -7,6 +7,8 @@
 
 Outil de prospection commerciale automatisé pour **agences web françaises**. Le pipeline identifie les entreprises d'un secteur donné, trouve leurs sites web, audite leur qualité par crawl léger, et génère un rapport de scoring : plus le site est mal optimisé / abandonné, plus l'entreprise est un prospect prioritaire.
 
+![Dashboard](assets/screenshot.png)
+
 ## Pipeline
 
 ```bash
