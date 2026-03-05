@@ -1,5 +1,10 @@
 # Prospection SEO — Outil multi-secteur
 
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
 Outil de prospection commerciale automatisé pour **agences web françaises**. Le pipeline identifie les entreprises d'un secteur donné, trouve leurs sites web, audite leur qualité par crawl léger, et génère un rapport de scoring : plus le site est mal optimisé / abandonné, plus l'entreprise est un prospect prioritaire.
 
 ## Pipeline
