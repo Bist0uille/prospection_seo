@@ -1,4 +1,4 @@
-"""Génère un rapport HTML filtrable depuis la base SQLite nautisme_na.db."""
+"""Génère un rapport HTML filtrable depuis la base SQLite prospection.db."""
 import json
 import sqlite3
 import pandas as pd
@@ -30,7 +30,6 @@ TRANCHE_EFFECTIFS = {
 
 # ── Chargement depuis SQLite ──────────────────────────────────────────────────
 conn = sqlite3.connect(DB_PATH)
-conn.row_factory = sqlite3.Row
 
 df = pd.read_sql_query("""
     SELECT
@@ -70,7 +69,7 @@ mask_fp = (
     (df["antibot"] != "True") &
     (df["down_erreur"] != "True")
 )
-df.loc[mask_fp, "statut_final"]  = "NON TROUVÉ"
+df.loc[mask_fp, "statut_final"]   = "NON TROUVÉ"
 df.loc[mask_fp, "site_web_final"] = ""
 
 rows       = df.to_dict(orient="records")
@@ -89,11 +88,11 @@ NAF_LABELS = {
 
 TRANCHE_JS = {code: {"label": v[0], "sort": v[1]} for code, v in TRANCHE_EFFECTIFS.items()}
 
-rows_json        = json.dumps(rows,        ensure_ascii=False)
-naf_json         = json.dumps(naf_values,  ensure_ascii=False)
-villes_json      = json.dumps(villes,      ensure_ascii=False)
-naf_labels_json  = json.dumps(NAF_LABELS,  ensure_ascii=False)
-tranche_json     = json.dumps(TRANCHE_JS,  ensure_ascii=False)
+rows_json       = json.dumps(rows,       ensure_ascii=False)
+naf_json        = json.dumps(naf_values, ensure_ascii=False)
+villes_json     = json.dumps(villes,     ensure_ascii=False)
+naf_labels_json = json.dumps(NAF_LABELS, ensure_ascii=False)
+tranche_json    = json.dumps(TRANCHE_JS, ensure_ascii=False)
 
 html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -126,28 +125,18 @@ html = f"""<!DOCTYPE html>
   td {{ padding: 7px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; max-width: 220px; word-break: break-word; }}
   tr:hover td {{ background: #f9fafb; }}
   .badge {{ display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .7rem; font-weight: 600; }}
-  .b-trouve {{ background: #dcfce7; color: #166534; }}
-  .b-non    {{ background: #fee2e2; color: #991b1b; }}
-  .b-conf   {{ background: #fef9c3; color: #854d0e; }}
-  .b-ok     {{ background: #dcfce7; color: #166534; }}
-  .b-fp     {{ background: #fee2e2; color: #991b1b; }}
-  .b-ab     {{ background: #fef3c7; color: #92400e; }}
-  .b-dn     {{ background: #f3f4f6; color: #6b7280; }}
-  .b-uc     {{ background: #fef9c3; color: #713f12; }}
+  .b-non  {{ background: #fee2e2; color: #991b1b; }}
+  .b-conf {{ background: #fef9c3; color: #854d0e; }}
+  .b-ok   {{ background: #dcfce7; color: #166534; }}
+  .b-ab   {{ background: #fef3c7; color: #92400e; }}
+  .b-dn   {{ background: #f3f4f6; color: #6b7280; }}
+  .b-uc   {{ background: #fef9c3; color: #713f12; }}
   a {{ color: #0a2540; text-decoration: none; }}
   a:hover {{ text-decoration: underline; }}
   .siren {{ font-family: monospace; font-size: .75rem; color: #9ca3af; }}
   .no-results {{ padding: 48px; text-align: center; color: #9ca3af; }}
   .sort-icon {{ opacity: .35; margin-left: 3px; }}
   th.sorted .sort-icon {{ opacity: 1; }}
-  .btn-mark {{ border: none; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: .75rem; font-weight: 600; background: #f3f4f6; color: #9ca3af; transition: all .15s; white-space: nowrap; }}
-  .btn-mark:hover {{ background: #fee2e2; color: #dc2626; }}
-  .btn-mark.bad  {{ background: #fee2e2; color: #dc2626; }}
-  .btn-mark.good {{ background: #dcfce7; color: #166534; }}
-  tr.is-bad td {{ opacity: .4; text-decoration: line-through; }}
-  tr.is-bad .btn-mark {{ opacity: 1; text-decoration: none; }}
-  tr.is-good td {{ background: #f0fdf4; }}
-  tr.is-good .btn-mark {{ opacity: 1; }}
 </style>
 </head>
 <body>
@@ -161,8 +150,6 @@ html = f"""<!DOCTYPE html>
     <div class="stat"><div class="stat-val" id="s-trouve">—</div><div class="stat-label">Trouvés</div></div>
     <div class="stat"><div class="stat-val" id="s-non">—</div><div class="stat-label">Non trouvés</div></div>
     <div class="stat"><div class="stat-val" id="s-uc">—</div><div class="stat-label">🚧 Constr.</div></div>
-    <div class="stat" style="background:rgba(239,68,68,.2)"><div class="stat-val" id="s-bad">0</div><div class="stat-label">Mauvais ✗</div></div>
-    <div class="stat" style="background:rgba(34,197,94,.2)"><div class="stat-val" id="s-good">0</div><div class="stat-label">Bons ✓</div></div>
   </div>
 </header>
 
@@ -199,17 +186,7 @@ html = f"""<!DOCTYPE html>
       <option value="4.5">≥ 4.5</option>
     </select>
   </div>
-  <div class="fg"><label>Marquage</label>
-    <select id="f-bad">
-      <option value="">Tous</option>
-      <option value="hide-bad">Masquer mauvais</option>
-      <option value="only-bad">Mauvais seulement</option>
-      <option value="only-good">Bons seulement</option>
-      <option value="only-neutral">Non marqués</option>
-    </select>
-  </div>
   <button class="btn" onclick="resetFilters()">Réinitialiser</button>
-  <button class="btn" style="background:#fee2e2;color:#dc2626" onclick="clearMarks()">Effacer marquages</button>
 </div>
 
 <div class="count-bar"><span id="count-display">—</span> résultats</div>
@@ -218,7 +195,6 @@ html = f"""<!DOCTYPE html>
 <table>
   <thead>
     <tr>
-      <th style="width:50px;text-align:center">✗</th>
       <th onclick="sortBy('denominationUniteLegale')" data-col="denominationUniteLegale">Entreprise <span class="sort-icon">↕</span></th>
       <th onclick="sortBy('siren')" data-col="siren">SIREN <span class="sort-icon">↕</span></th>
       <th onclick="sortBy('codePostalEtablissement')" data-col="codePostalEtablissement">CP <span class="sort-icon">↕</span></th>
@@ -246,42 +222,6 @@ const TRANCHES   = {tranche_json};
 let currentSort = {{ col: '', dir: 1 }};
 let filtered = [...DATA];
 
-// ── Marquage 3 états persisté dans localStorage ───────────────────────────
-// markMap : siren → 'bad' | 'good'  (absent = neutre)
-const LS_KEY = 'nautisme_marks_v2';
-let markMap = new Map(Object.entries(JSON.parse(localStorage.getItem(LS_KEY) || '{{}}')));
-
-function saveMarks() {{
-  localStorage.setItem(LS_KEY, JSON.stringify(Object.fromEntries(markMap)));
-  document.getElementById('s-bad').textContent  = [...markMap.values()].filter(v => v === 'bad').length;
-  document.getElementById('s-good').textContent = [...markMap.values()].filter(v => v === 'good').length;
-}}
-
-// Cycle : neutre → bad → good → neutre
-function toggleMark(siren) {{
-  const cur = markMap.get(siren) || 'neutral';
-  const next = cur === 'neutral' ? 'bad' : cur === 'bad' ? 'good' : 'neutral';
-  if (next === 'neutral') markMap.delete(siren);
-  else markMap.set(siren, next);
-  saveMarks();
-  // Mise à jour visuelle de la ligne sans re-render
-  const btn = document.querySelector(`button[data-siren="${{siren}}"]`);
-  const row = btn?.closest('tr');
-  if (!btn || !row) return;
-  row.className = next === 'bad' ? 'is-bad' : next === 'good' ? 'is-good' : '';
-  btn.className = 'btn-mark' + (next === 'bad' ? ' bad' : next === 'good' ? ' good' : '');
-  btn.textContent = next === 'bad' ? '✗ mauvais' : next === 'good' ? '✓ bon' : '· marquer';
-  if (document.getElementById('f-bad').value) applyFilters();
-}}
-
-function clearMarks() {{
-  const total = markMap.size;
-  if (!total || !confirm(`Effacer les ${{total}} marquages ?`)) return;
-  markMap.clear();
-  saveMarks();
-  applyFilters();
-}}
-
 // Populate selects
 NAF_VALUES.forEach(v => {{
   const o = document.createElement('option');
@@ -298,7 +238,6 @@ VILLES.forEach(v => {{
 
 function fmtDate(d) {{
   if (!d || d === 'nan') return '—';
-  // Format ISO YYYY-MM-DD → affiche MM/YYYY
   const m = d.match(/^(\\d{{4}})-(\\d{{2}})/);
   return m ? m[2] + '/' + m[1] : d;
 }}
@@ -306,44 +245,37 @@ function fmtDate(d) {{
 function qualite(r) {{
   if (r.statut_final !== 'TROUVÉ') return '';
   if (r.under_construction === true || r.under_construction === 'True') return 'uc';
-  if (r.secteur_ok === 'True' || r.secteur_ok === true)   return 'ok';
-  if (r.antibot === true || r.antibot === 'True')          return 'ab';
-  if (r.down_erreur === true || r.down_erreur === 'True')  return 'dn';
-  return 'ok';  // v2 garanti secteur
+  if (r.secteur_ok === 'True' || r.secteur_ok === true)  return 'ok';
+  if (r.antibot === true || r.antibot === 'True')         return 'ab';
+  if (r.down_erreur === true || r.down_erreur === 'True') return 'dn';
+  return 'ok';
 }}
 
-// Score pour tri fiabilité : plus haut = plus fiable
 function fiabiliteScore(r) {{
   if (r.statut_final !== 'TROUVÉ') return 0;
   const q = qualite(r);
   if (q === 'ok') return 4;
-  if (q === 'ab') return 3;  // anti-bot : on sait pas, peut être ok
-  if (q === 'uc') return 2;  // en construction : à surveiller
-  if (q === 'dn') return 1;  // down : inaccessible
+  if (q === 'ab') return 3;
+  if (q === 'uc') return 2;
+  if (q === 'dn') return 1;
   return 1;
 }}
 
 function applyFilters() {{
-  const search  = document.getElementById('f-search').value.toLowerCase().trim();
-  const statut  = document.getElementById('f-statut').value;
-  const qualF   = document.getElementById('f-qualite').value;
-  const naf     = document.getElementById('f-naf').value;
-  const ville   = document.getElementById('f-ville').value;
-  const conf    = parseFloat(document.getElementById('f-conf').value) || 0;
-  const badF    = document.getElementById('f-bad').value;
+  const search = document.getElementById('f-search').value.toLowerCase().trim();
+  const statut = document.getElementById('f-statut').value;
+  const qualF  = document.getElementById('f-qualite').value;
+  const naf    = document.getElementById('f-naf').value;
+  const ville  = document.getElementById('f-ville').value;
+  const conf   = parseFloat(document.getElementById('f-conf').value) || 0;
 
   filtered = DATA.filter(r => {{
     if (search && !r.denominationUniteLegale.toLowerCase().includes(search) && !String(r.siren).includes(search)) return false;
     if (statut && r.statut_final !== statut) return false;
-    if (qualF && qualite(r) !== qualF) return false;
+    if (qualF  && qualite(r) !== qualF) return false;
     if (naf    && r.activitePrincipaleUniteLegale !== naf) return false;
     if (ville  && r.libelleCommuneEtablissement !== ville) return false;
     if (conf   && r.statut_final === 'TROUVÉ' && (parseFloat(r.confiance_final) || 0) < conf) return false;
-    const mark = markMap.get(String(r.siren)) || 'neutral';
-    if (badF === 'hide-bad'    && mark === 'bad')     return false;
-    if (badF === 'only-bad'    && mark !== 'bad')     return false;
-    if (badF === 'only-good'   && mark !== 'good')    return false;
-    if (badF === 'only-neutral'&& mark !== 'neutral') return false;
     return true;
   }});
 
@@ -375,7 +307,7 @@ function applySort() {{
 }}
 
 function render() {{
-  const tbody = document.getElementById('table-body');
+  const tbody  = document.getElementById('table-body');
   const trouve = filtered.filter(r => r.statut_final === 'TROUVÉ').length;
   const non    = filtered.filter(r => r.statut_final === 'NON TROUVÉ').length;
   const uc     = filtered.filter(r => qualite(r) === 'uc').length;
@@ -403,24 +335,26 @@ function render() {{
       : q === 'dn' ? '<span class="badge b-dn">↓ down</span>'
       : '<span class="badge b-ok">✓ sûr</span>';
 
-    const raisonBadge = '';
+    const confBadge = r.confiance_final
+      ? `<span class="badge b-conf">${{r.confiance_final}}</span>`
+      : '';
 
-    const confBadge = r.confiance_final ? `<span class="badge b-conf">${{r.confiance_final}}</span>` : '';
     const site = r.site_web_final
-      ? `<a href="${{r.site_web_final}}" target="_blank" rel="noopener">${{r.site_web_final.replace(/^https?:\\/\\//, '').replace(/\\/$/, '').substring(0,40)}}</a>`
+      ? `<a href="${{r.site_web_final}}" target="_blank" rel="noopener">${{r.site_web_final.replace(/^https?:\\/\\//, '').replace(/\\/$/, '').substring(0, 40)}}</a>`
       : '<span style="color:#d1d5db">—</span>';
-    const naf = r.activitePrincipaleUniteLegale;
-    const nafSub = NAF_LABELS[naf] ? `<br><span style="color:#9ca3af;font-size:.7rem">${{NAF_LABELS[naf]}}</span>` : '';
 
-    const tranche = r.trancheEffectifsUniteLegale || 'NN';
+    const naf    = r.activitePrincipaleUniteLegale;
+    const nafSub = NAF_LABELS[naf]
+      ? `<br><span style="color:#9ca3af;font-size:.7rem">${{NAF_LABELS[naf]}}</span>`
+      : '';
+
+    const tranche      = r.trancheEffectifsUniteLegale || 'NN';
     const trancheLabel = (TRANCHES[tranche] || {{label:'NC'}}).label;
-    const trancheStyle = tranche === 'NN' ? 'color:#d1d5db' : (TRANCHES[tranche]||{{sort:0}}).sort >= 7 ? 'color:#166534;font-weight:600' : '';
+    const trancheStyle = tranche === 'NN'
+      ? 'color:#d1d5db'
+      : (TRANCHES[tranche]||{{sort:0}}).sort >= 7 ? 'color:#166534;font-weight:600' : '';
 
-    const mark = markMap.get(String(r.siren)) || 'neutral';
-    const markLabel = mark === 'bad' ? '✗ mauvais' : mark === 'good' ? '✓ bon' : '· marquer';
-    const markBtn = `<button class="btn-mark${{mark === 'bad' ? ' bad' : mark === 'good' ? ' good' : ''}}" data-siren="${{r.siren}}" onclick="toggleMark('${{r.siren}}')">${{markLabel}}</button>`;
-    return `<tr class="${{mark === 'bad' ? 'is-bad' : mark === 'good' ? 'is-good' : ''}}">
-      <td style="text-align:center">${{markBtn}}</td>
+    return `<tr>
       <td>${{r.denominationUniteLegale}}</td>
       <td><span class="siren">${{r.siren}}</span></td>
       <td>${{r.codePostalEtablissement}}</td>
@@ -429,23 +363,22 @@ function render() {{
       <td style="text-align:center;font-size:.75rem;${{trancheStyle}}">${{trancheLabel}}</td>
       <td style="text-align:center;font-size:.75rem;white-space:nowrap;color:#6b7280">${{fmtDate(r.dateCreationUniteLegale)}}</td>
       <td>${{site}}</td>
-      <td>${{statBadge}}${{raisonBadge}}</td>
+      <td>${{statBadge}}</td>
       <td>${{confBadge}}</td>
     </tr>`;
   }}).join('');
 }}
 
 function resetFilters() {{
-  ['f-search','f-statut','f-qualite','f-naf','f-ville','f-conf','f-bad'].forEach(id =>
+  ['f-search','f-statut','f-qualite','f-naf','f-ville','f-conf'].forEach(id =>
     document.getElementById(id).value = '');
   applyFilters();
 }}
 
-['f-statut','f-qualite','f-naf','f-ville','f-conf','f-bad'].forEach(id =>
+['f-statut','f-qualite','f-naf','f-ville','f-conf'].forEach(id =>
   document.getElementById(id).addEventListener('change', applyFilters));
 document.getElementById('f-search').addEventListener('input', applyFilters);
 
-saveMarks();  // initialise les compteurs depuis localStorage
 applyFilters();
 </script>
 </body>

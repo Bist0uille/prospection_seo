@@ -3,114 +3,84 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-Outil de prospection commerciale automatisé pour **agences web françaises**. Le pipeline identifie les entreprises d'un secteur donné, trouve leurs sites web, audite leur qualité par crawl léger, et génère un rapport de scoring : plus le site est mal optimisé / abandonné, plus l'entreprise est un prospect prioritaire.
+Outil de prospection commerciale automatisé pour **agences web**. À partir d'un secteur d'activité (nautisme, architectes, restaurants…), il identifie toutes les entreprises françaises du secteur, trouve leurs sites web, et les classe par **opportunité business** : plus le site est absent, ancien ou mal fait, plus l'entreprise est en tête de liste.
 
-![Dashboard](assets/screenshot.png)
+![Rapport compilé](assets/rapport_compile.png)
 
-## Pipeline
+---
+
+## Ce que ça fait concrètement
+
+1. **Extrait les entreprises** depuis la base INSEE/SIRENE selon des codes NAF (ex : construction de bateaux, réparation navires…)
+2. **Trouve leurs sites web** automatiquement — recherche multi-passes via DuckDuckGo + fallback Google Maps Places
+3. **Valide chaque site** : le contenu doit correspondre au secteur (pas de faux positifs)
+4. **Qualifie les prospects** par signal commercial : pas de site, site down, site lent, site ancien, pas de blog
+5. **Génère deux rapports HTML** filtrables et triables — un rapport global, un rapport santé détaillé
+
+Le tout tourne sans navigateur, sans Selenium, uniquement avec `requests` et l'API `ddgs`.
+
+---
+
+## Résultats typiques
+
+Sur le secteur nautisme (1 037 entreprises) :
+- **395 sites trouvés** (validation sectorielle stricte)
+- **642 sans site détecté** — signal commercial maximal
+- Tri par effectif, date de création, score de confiance
+
+---
+
+## Installation
 
 ```bash
+git clone https://github.com/Bist0uille/prospection_seo.git
+cd prospection_seo
+python3 -m venv .venv_wsl
+source .venv_wsl/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## Utilisation
+
+### Pipeline complet
+
+```bash
+source .venv_wsl/bin/activate
+
 # Par fichier secteur
 python Scripts/run_full_pipeline.py --sector Sectors/nautisme.txt
 
 # Par codes NAF directs
 python Scripts/run_full_pipeline.py --codes 3012Z,3011Z,3315Z --name nautisme
 
-# Avec limites
-python Scripts/run_full_pipeline.py --sector Sectors/restaurants.txt --limit 50 --min-employees 1
+# Avec filtres
+python Scripts/run_full_pipeline.py --sector Sectors/nautisme.txt --limit 50 --min-employees 1
 ```
 
 | Étape | Script | Description |
 |-------|--------|-------------|
 | 1 | `prospect_analyzer.py` | Filtre la base INSEE par codes NAF, tranche d'effectifs, statut actif, déduplique par SIREN |
-| 2 | `find_websites.py` | Recherche multi-passes avec scoring de confiance et validation sectorielle (voir ci-dessous) |
+| 2 | `find_websites.py` | Recherche multi-passes avec scoring de confiance et validation sectorielle |
 | 3 | `prospect_analyzer.py` | Vérifie chaque site (matching domaine, blocklist, filtre sites non-français) |
 | 4 | `seo_auditor.py` | Crawl BFS léger (max 30 pages), extraction signaux SEO business |
 | 5 | `prospect_analyzer.py` | Scoring d'opportunité business (1–10), rapport CSV final |
 
-Les résultats sont isolés par secteur dans `Results/{secteur}/`.
+### Rapport compilé HTML
 
-### Options CLI
-
-```
---sector FILE         Fichier .txt de codes APE (voir Sectors/)
---codes A,B,C         Codes NAF directs (ex. 3012Z,3011Z)
---name NOM            Nom du secteur pour le dossier de résultats
---limit N             Limiter le nombre d'entreprises (tests)
---min-employees N     Effectif minimum (défaut : 10)
-```
-
-## Secteurs disponibles
-
-Les secteurs sont définis dans `Sectors/` — un fichier `.txt` par secteur, un code APE par ligne :
-
-```
-3012Z - Construction de bateaux de plaisance
-3011Z - Construction de navires et structures flottantes
-# les commentaires sont ignorés
-```
-
-Secteurs inclus : `nautisme`, `architectes`, `immobilier`, `restaurants`.
-Copier `Sectors/template.txt` pour créer un nouveau secteur.
-
-## Base de données SQLite (db_init.py)
-
-Les données de prospection sont centralisées dans `DataBase/prospection.db` — base multi-secteur générée à partir des CSV du pipeline.
-
-```bash
-python Scripts/db_init.py --sector nautisme_na       # migrer un secteur
-python Scripts/db_init.py --sector nautisme_na --no-fetch  # sans fetch API
-python Scripts/db_init.py --stats-only               # afficher les stats
-```
-
-### Schéma
-
-| Table | Description |
-|-------|-------------|
-| `entreprises` | Données SIRENE — PK `(siren, secteur)` |
-| `sites_web` | Sites trouvés par le pipeline |
-| `site_health` | Résultats du health checker |
-| `seo_audits` | Résultats d'audit SEO |
-| `contacts` | Emails et téléphones extraits |
-
-Les dates de création manquantes sont fetched automatiquement depuis l'API `recherche-entreprises.api.gouv.fr`.
-
-### generate_compiled_html.py
-
-Le rapport HTML lit directement depuis SQLite (JOIN `entreprises` + `sites_web`). Fonctionnalités :
-- Marquage 3 états persistant (localStorage) : **· marquer** → **✗ mauvais** → **✓ bon**
-- Tri par effectif (tranche INSEE), date de création, confiance
-- Badge 🚧 pour les sites en construction/maintenance
-- Nettoyage faux positifs : `secteur_ok=False` → reclassé NON TROUVÉ
+Tableau filtrable de toutes les entreprises du secteur avec leurs sites web.
 
 ```bash
 python Scripts/generate_compiled_html.py --sector nautisme_na
 ```
 
-## Recherche Google Maps (find_websites_gmaps.py)
+Colonnes : nom, SIREN, CP, ville, NAF, effectif, date de création, site web, statut/fiabilité, score de confiance.
 
-Passe supplémentaire pour les entreprises sans site détecté par DDG. Utilise l'**API Google Maps Places (New) v1**.
+### Rapport santé (site_health_checker.py)
 
-```bash
-export GOOGLE_MAPS_API_KEY="AIza..."
-python Scripts/find_websites_gmaps.py --limit 20           # test
-python Scripts/find_websites_gmaps.py                       # toutes les NON TROUVÉ
-python Scripts/find_websites_gmaps.py --min-employees 1     # avec effectif > 0
-```
-
-- Trie par effectif décroissant (priorité grandes entreprises)
-- Valide le secteur en fetchant le contenu du site
-- Résultats dans `Results/{secteur}/filtered_companies_websites_gmaps.csv`
-
-Nécessite une clé API Google Maps Platform (variable `GOOGLE_MAPS_API_KEY` dans `.env`).
-
----
-
-## Health Checker (site_health_checker.py)
-
-Script standalone de qualification commerciale — indépendant du pipeline principal.
+Script standalone — qualifie les sites existants par signal commercial.
 
 ```bash
 python Scripts/site_health_checker.py \
@@ -118,219 +88,110 @@ python Scripts/site_health_checker.py \
   --output Results/nautisme/site_health
 ```
 
-Classifie **toutes** les entreprises (avec ou sans site trouvé) par ordre de priorité :
+| Signal | Description |
+|--------|-------------|
+| `pas_de_site` | Aucun site trouvé — opportunité maximale |
+| `down` | Site inaccessible |
+| `lent` | Réponse > 3 s |
+| `site_ancien` | Copyright > 2 ans |
+| `sans_blog` | Site up mais pas de blog |
+| `ok` | Pas d'opportunité évidente |
 
-| Priorité | Signal | Description |
-|----------|--------|-------------|
-| 1 | `pas_de_site` | Aucun site web trouvé — opportunité maximale |
-| 2 | `down` | Site inaccessible (erreur HTTP, DNS, timeout) |
-| 3 | `lent` | Temps de réponse > 3 s |
-| 4 | `site_ancien` | Copyright > 2 ans |
-| 5 | `sans_blog` | Site up mais aucun blog détecté |
-| 6 | `ok` | Pas d'opportunité évidente |
-
-Les sites gérés par une agence reçoivent un **bonus +0.5** sur leur score (descendent dans leur catégorie).
-
-### Signaux additionnels
-
-- **Agence détectée** : analyse footer, commentaires HTML, liens footer (avec liste de faux positifs : Complianz, WordPress, Elementor…)
-- **Copyright** : extraction de l'année pour détecter les sites anciens
-- **Réseaux sociaux** : liens cliquables vers Facebook, Instagram, LinkedIn, YouTube, TikTok, X…
-
-### Options CLI
-
-```
---departements D      Codes départements à inclure, ex. 17,33,16 (défaut : tous)
---slow-threshold MS   Seuil de lenteur en ms (défaut : 3000)
---output PATH         Préfixe de sortie sans extension (génère .csv et .html)
-```
-
-### Sorties
-
-- `site_health.csv` — données brutes, une ligne par entreprise
-- `site_health.html` — rapport filtrable (filtre par signal, masquer agences en place)
+Les sites gérés par une agence reçoivent un **bonus +0.5** (descendent dans leur catégorie — moins urgents).
 
 ---
 
-## Recherche de sites web (étape 2 — find_websites.py)
+## Recherche de sites (find_websites.py)
 
-Algorithme multi-passes avec **scoring de confiance** et **validation sectorielle** — seuls les sites dont le contenu correspond au secteur sont retenus.
+Algorithme multi-passes — seuls les sites dont le contenu correspond au secteur sont retenus.
 
-### Passes de recherche (dans l'ordre)
+| Passe | Requête |
+|-------|---------|
+| 0 | URL devinée directement (`{slug}.fr` / `{slug}.com`) |
+| 1 | `{alias}` (nom commercial entre parenthèses) |
+| 2 | `{nom}` légal nettoyé |
+| 3 | `{nom} {commune}` |
+| 4 | `{nom} {secteur}` |
 
-| Passe | Requête | Description |
-|-------|---------|-------------|
-| 0 | URL devinée directement | Essaie `{slug}.fr` / `{slug}.com` sans moteur de recherche |
-| 1 | `{alias}` | Nom commercial entre parenthèses (ex : "FAURSAIL" depuis "EMILIEN FAURENS (FAURSAIL)") |
-| 2 | `{nom}` | Dénomination légale nettoyée |
-| 3 | `{nom} {commune}` | Nom + ville du siège |
-| 4 | `{nom} {secteur}` | Nom + mot-clé secteur (ex : "nautisme") |
+**Score de confiance** : keyword du nom dans le domaine (+2.0), TLD `.fr` (+0.5), code postal dans la page (+1.5), commune (+1.0). Seuil d'acceptation : ≥ 2.5 ET `secteur_ok = True`.
 
-### Score de confiance
+### Fallback Google Maps (find_websites_gmaps.py)
 
-Chaque URL candidate reçoit un score flottant :
+Pour les entreprises sans site détecté par DDG, une passe supplémentaire interroge l'**API Google Maps Places (New) v1**.
 
-| Signal | Points |
-|--------|--------|
-| Keyword du nom dans le domaine | +2.0 |
-| TLD `.fr` | +0.5 |
-| Code postal dans la page | +1.5 |
-| Commune dans la page | +1.0 |
+```bash
+export GOOGLE_MAPS_API_KEY="AIza..."   # ou dans .env
+python Scripts/find_websites_gmaps.py --min-employees 1
+```
 
-**Seuil d'acceptation : ≥ 2.5 ET secteur_ok = True**
+Trie par effectif décroissant, valide le contenu du site avant d'accepter le résultat.
 
-### Validation sectorielle (secteur_ok)
+---
 
-Le snippet de la page (title + h1 + premier paragraphe) doit contenir au moins un mot du vocabulaire sectoriel (FR + EN) :
-- FR : bateau, voilier, yacht, plaisance, chantier, accastillage, marine, navigation…
-- EN : sailing, boatyard, hull, rigging, chandlery, marina, nautical…
+## Base de données (db_init.py)
 
-Des keywords supplémentaires sont ajoutés selon le code NAF de l'entreprise :
-- **3315Z** (réparation) : repair, maintenance, overhaul, entretien…
-- **7734Z** (location) : charter, rental, hire, bareboat…
-- **5010Z** (transport passagers) : cruise, excursion, crossing, passenger…
+Les données sont centralisées dans `DataBase/prospection.db` — base SQLite multi-secteur.
 
-### Colonnes de sortie
+```bash
+python Scripts/db_init.py --sector nautisme_na        # migration + fetch dates SIRENE
+python Scripts/db_init.py --sector nautisme_na --no-fetch  # sans appel API
+python Scripts/db_init.py --stats-only                # statistiques
+```
 
-| Colonne | Description |
-|---------|-------------|
-| `site_web` | URL trouvée (racine du domaine) |
-| `statut_recherche` | `TROUVÉ` / `NON TROUVÉ` / `ERREUR` |
-| `source_site_web` | Passe ayant trouvé le site (`direct`, `DDG_alias`, `DDG_nom`, `DDG_commune`, `DDG_secteur`) |
-| `confiance` | Score flottant 0–5.0 |
-| `secteur_ok` | `True` si contenu sectoriel confirmé |
+Les dates de création manquantes sont fetched automatiquement depuis l'API `recherche-entreprises.api.gouv.fr`.
 
-## Audit SEO (seo_auditor.py)
+| Table | Contenu |
+|-------|---------|
+| `entreprises` | Données SIRENE — PK `(siren, secteur)` |
+| `sites_web` | Sites trouvés, statut, confiance, flags |
+| `site_health` | Résultats health checker |
+| `seo_audits` | Résultats d'audit SEO |
+| `contacts` | Emails et téléphones extraits |
 
-Crawl BFS léger — rapide et stable, sans navigateur. Signaux extraits par site :
-
-| Signal | Description |
-|--------|-------------|
-| `nb_pages` | Nombre de pages crawlées |
-| `has_sitemap` | Présence de sitemap.xml |
-| `has_blog` | Blog détecté (URL patterns → liens → nav vérifiée) |
-| `blog_status` | `actif` / `semi-actif` / `abandonné` / `présent` / `absent` |
-| `derniere_maj_blog` | Date du dernier article détecté |
-| `frequence_publication` | `hebdomadaire` / `mensuelle` / `trimestrielle` / `rare` |
-| `activite_status` | Basé sur les dates blog (fiable) ou all_dates (plafonné à semi-actif) |
-| `cms_detecte` | WordPress, Wix, Shopify, Squarespace, Webflow, Joomla, Drupal |
-| `mots_moyen_par_page` | Densité de contenu |
-| `ratio_texte_html` | Ratio texte visible / HTML brut |
-| `titles_dupliques` | Ratio 0.0–1.0 de titles en doublon |
-| `pages_sans_meta_desc` | Nombre de pages sans meta description |
-| `pages_sans_h1` | Nombre de pages sans H1 |
-| `pages_vides` | Pages < 50 mots (hors /contact, /cgv, /mentions-legales…) |
-
-> Un site sans blog ne peut jamais être déclaré "actif" — les dates globales (footers, CGU) ne sont pas fiables pour juger l'activité réelle.
-
-## Scoring d'opportunité business
-
-Score de 1 à 10 mesurant la **probabilité de deal**, pas la qualité SEO académique.
-
-### Signaux positifs
-
-| Signal | Points |
-|--------|--------|
-| Blog abandonné | +5 |
-| Blog semi-actif | +2 |
-| Pas de blog (site vitrine souvent obsolète) | +1 |
-| nb_pages < 5 | +3 |
-| nb_pages 5–9 | +1 |
-| mots_moyen_par_page < 150 | +2 |
-| ratio_texte_html < 0.15 | +2 |
-| CMS non détecté (site bricolé) | +2 |
-| CMS Wix ou Squarespace | +1 |
-| Pas de sitemap | +1 |
-| Pages sans meta desc (par tranche de 20 %) | +0.5 |
-| Pages sans H1 (par tranche de 20 %) | +0.5 |
-| Titles dupliqués > 30 % | +0.5 |
-| Pages vides (par tranche de 20 %) | +0.5 |
-
-### Signaux négatifs
-
-| Signal | Points |
-|--------|--------|
-| Blog actif + publication hebdo/mensuelle | −4 |
-| nb_pages > 50 | −3 |
-| mots_moyen_par_page > 400 | −2 |
+---
 
 ## Structure du projet
 
 ```
 ├── Scripts/
 │   ├── run_full_pipeline.py      # Point d'entrée — pipeline multi-secteur
-│   ├── find_websites.py          # Recherche sites (scoring confiance + validation sectorielle)
-│   ├── find_websites_gmaps.py    # Passe supplémentaire via Google Maps Places API (New)
-│   ├── fetch_sirene_api.py       # Fetch entreprises depuis l'API recherche-entreprises.gouv.fr
+│   ├── find_websites.py          # Recherche sites web (DDG, scoring, validation)
+│   ├── find_websites_gmaps.py    # Fallback Google Maps Places API
+│   ├── fetch_sirene_api.py       # Fetch entreprises depuis l'API SIRENE
 │   ├── seo_auditor.py            # Audit SEO par crawl BFS léger
 │   ├── prospect_analyzer.py      # Filtrage, vérification, scoring
-│   ├── site_health_checker.py    # Health check standalone (down/lent/agence/blog/réseaux)
-│   ├── db_init.py                # Migration des CSV vers SQLite (prospection.db)
-│   ├── verify_v1_sites.py        # Vérification sectorielle a posteriori d'un CSV existant
+│   ├── site_health_checker.py    # Health check standalone
+│   ├── db_init.py                # Migration CSV → SQLite (prospection.db)
 │   ├── generate_compiled_html.py # Rapport HTML filtrable depuis SQLite
-│   └── core/                     # Infrastructure partagée (logging, modèles Pydantic)
+│   └── core/                     # Infrastructure partagée
 │
 ├── Sectors/
 │   ├── nautisme.txt              # Codes APE secteur nautisme
-│   ├── architectes.txt
-│   ├── immobilier.txt
-│   ├── restaurants.txt
 │   └── template.txt              # Modèle pour un nouveau secteur
 │
 ├── DataBase/
-│   ├── prospection.db            # Base SQLite multi-secteur (généré par db_init.py)
-│   └── annuaire-des-entreprises-*.csv  # Sources brutes INSEE
+│   └── prospection.db            # Base SQLite multi-secteur (généré par db_init.py)
 │
 ├── Results/
 │   └── {secteur}/
 │       ├── filtered_companies_websites_compiled.csv  # CSV compilé (corrections manuelles)
-│       ├── final_prospect_report.csv                  # Rapport final par secteur
-│       ├── site_health.csv                            # Résultats health checker
-│       └── site_health.html                           # Rapport HTML filtrable
+│       ├── site_health.csv
+│       └── site_health.html
 │
-├── requirements.txt
-└── .gitignore
+└── assets/
+    └── rapport_compile.png
 ```
 
-## Installation
+---
 
-```bash
-git clone https://github.com/Bist0uille/prospection_seo.git
-cd prospection_seo
-make install        # crée le venv WSL et installe les dépendances
-```
+## Ajouter un secteur
 
-Ou manuellement :
+1. Créer `Sectors/mon_secteur.txt` avec les codes NAF (un par ligne, `#` pour commenter)
+2. Lancer le pipeline : `python Scripts/run_full_pipeline.py --sector Sectors/mon_secteur.txt`
+3. Migrer en base : `python Scripts/db_init.py --sector mon_secteur`
 
-```bash
-python3 -m venv .venv_wsl
-source .venv_wsl/bin/activate
-pip install -r requirements.txt
-```
-
-> Aucun navigateur requis — la recherche de sites (étape 2) utilise l'API `ddgs` directement.
-
-## Rapport final
-
-`Results/{secteur}/final_prospect_report.csv` :
-
-| Colonne | Description |
-|---------|-------------|
-| `entreprise` | Nom de l'entreprise |
-| `site_web` | URL du site |
-| `score` | Score d'opportunité 1–10 |
-| `cms` | CMS détecté |
-| `nb_pages` | Pages crawlées |
-| `blog` | Présence blog |
-| `blog_url` | URL du blog |
-| `activite` | Statut d'activité |
-| `derniere_maj_site` | Dernière date détectée |
-| `sitemap` | Présence sitemap |
-| `pages_sans_meta_desc` | Pages sans meta description |
-| `pages_sans_h1` | Pages sans H1 |
-| `mots_moy_page` | Mots moyens par page |
-| `resume` | Résumé textuel des opportunités |
+---
 
 ## Considérations légales
 
-La collecte automatisée de données doit être effectuée dans le respect du RGPD et des conditions d'utilisation des sites web. Cet outil est fourni à des fins d'analyse commerciale.
+Cet outil utilise des données publiques (base INSEE/SIRENE) et effectue des requêtes HTTP standards. À utiliser dans le respect du RGPD et des conditions d'utilisation des sites visités.
