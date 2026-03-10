@@ -3,8 +3,19 @@
 Website discovery via DuckDuckGo search API (ddgs).
 
 For each company in the input CSV, queries the DuckDuckGo API (no browser
-needed), validates the result against the company name (keyword matching),
-and saves a URL when a match is found.
+needed), validates the result with multi-signal confidence scoring, and saves
+a URL when a match is found with confirmed sector content.
+
+Strategy (passes in order):
+  0 — Direct URL guessing (no search engine)
+  1 — "{alias}"       — trade name between parentheses, if present
+  2 — "{nom}"         — legal name
+  3 — "{nom} {commune}"
+  4 — "{nom} {secteur}"
+
+Acceptance criteria:
+  - conf >= CONFIDENCE_THRESHOLD (2.5)
+  - secteur_ok == True (at least one sector keyword in page title/h1/p)
 
 Usage:
   python Scripts/find_websites.py Results/nautisme/filtered_companies.csv
@@ -19,13 +30,13 @@ import sys
 import time
 import random
 from pathlib import Path
+from urllib.parse import urlparse
 
 import click
 import pandas as pd
 import requests
 from pydantic import ValidationError
 from tqdm import tqdm
-from urllib.parse import urlparse
 
 # ── Project root on sys.path ──────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -38,6 +49,8 @@ logger = get_logger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
+CONFIDENCE_THRESHOLD = 2.5
+
 DIRECTORY_DOMAINS: set[str] = {
     "societe.com", "pagesjaunes.fr", "pappers.fr",
     "annuaire-entreprises.data.gouv.fr", "verif.com",
@@ -45,68 +58,109 @@ DIRECTORY_DOMAINS: set[str] = {
     "linkedin.com", "youtube.com", "wikipedia.org", "doctrine.fr",
     "app.dataprospects.fr", "service-de-reparation-de-bateaux.autour-de-moi.com",
     "entreprises.lagazettefrance.fr", "reseauexcellence.fr", "actunautique.com",
-    # annuaires locaux / portails ville (ajoutés suite audit secteur nautisme)
     "autour-de-moi.tel", "autour-de-moi.com",
     "nous-larochelle.fr", "nous-bordeaux.fr",
-    "investinbordeaux.fr",
-    "portail-nautisme.fr",
-    "bateauavendre.fr",
-    "seapolelarochelle.com",
+    "investinbordeaux.fr", "portail-nautisme.fr",
+    "bateauavendre.fr", "seapolelarochelle.com",
+    "chateau.fr", "chateaux-france.com", "bordeaux.guides.winefolly.com",
+    # Annuaires génériques
+    "compagnie.com", "annuairefrancais.fr", "annuaire.fr", "123annuaire.com",
+    "infonet.fr", "manageo.fr", "societe.ninja", "score3.fr",
+    "e-pro.fr", "lemarche.fr", "entreprises.annuairefrancais.fr",
+    "journalmarinemarchande.fr", "cbnews.fr",
+    # Annuaires financiers / juridiques
+    "infogreffe.fr", "bodacc.fr", "kashe.fr", "dirigeant.com", "bilan-gratuit.fr",
 }
 
-# Mots trop courants pour valider un match de domaine : ils apparaissent dans
-# des dizaines de domaines non liés à l'entreprise cherchée.
-# Ils restent dans la requête de recherche DDG, mais n'entrent pas dans le matching domaine.
-#
-# NE PAS mettre ici les mots spécifiques au secteur qui peuvent être LE nom
-# de l'entreprise (ex: "marine" pour RC MARINE, "naval" pour NAVAL GROUP).
 _DOMAIN_NOISE_WORDS: set[str] = {
-    # Villes / régions
     "bordeaux", "larochelle", "nantes", "brest", "toulon", "marseille",
     "gironde", "charente", "atlantique", "arcachon",
-    # Termes sectoriels trop génériques (apparaissent dans annuaires et portails)
     "maritime", "nautique", "nautisme", "yachting", "bateau", "bateaux",
     "port", "mer", "ocean",
-    # Termes corporate génériques
+    "chateau", "vignobles", "vignoble", "domaine", "domaines", "vigne", "vignes",
+    "wine", "vins", "vin",
     "france", "french", "groupe", "group", "services", "service",
     "industrie", "industries", "invest", "solutions",
 }
 
 _STOP_WORDS: set[str] = {"sa", "sas", "sarl", "eurl", "snc", "ste", "et", "de", "la", "les", "des"}
 
+# Vocabulaire sectoriel — normalisé (minuscules, sans accents/tirets/espaces).
+_SECTEUR_KEYWORDS: set[str] = {
+    # Embarcations (FR)
+    "bateau", "bateaux", "voilier", "voiliers", "yacht", "yachts", "yachting",
+    "catamaran", "trimaran", "deriveur", "horsbord", "jetski", "kayak",
+    "paddle", "canoe", "pirogue", "chaloupe", "annexe", "zodiac", "pneumatique",
+    # Activité nautique (FR)
+    "nautisme", "nautique", "plaisance", "plaisancier", "navigation", "naviguer",
+    "croisiere", "regate", "regates", "regatier", "skipper",
+    "charter", "plongee", "surf", "kitesurf",
+    # Construction / réparation (FR)
+    "chantiernaval", "chantier", "carene", "coque", "composite", "refit",
+    "sellerie", "greement", "accastillage", "grement", "voilerie",
+    # Maritime / marin (FR)
+    "marin", "marine", "maritime", "armateur", "armement",
+    # Transport / location (FR)
+    "fluvial", "fluviale", "location", "loueur", "affreter",
+    "transport", "ferry", "traversee",
+    # Équipements (FR)
+    "moteur", "helice", "gouvernail", "derive", "ancre",
+    "inox", "antifouling", "carburant",
+    # Port / infrastructure (FR)
+    "port", "marina", "capitainerie", "cale", "quai", "ponton",
+    # Embarcations (EN)
+    "sailing", "sailboat", "powerboat", "motorboat", "dinghy", "outboard",
+    "rib", "inflatable", "vessel", "boat", "boats", "ship",
+    # Activité nautique (EN)
+    "boating", "seafaring", "offshore", "regatta", "racing", "cruising",
+    "diving", "watersport", "watersports",
+    # Construction / réparation (EN)
+    "boatyard", "shipyard", "boatbuilding", "hull", "rigging", "chandlery",
+    "repower", "fiberglass", "gelcoat",
+    # Maritime (EN)
+    "nautical", "seafarer", "mariner",
+    # Transport / location (EN)
+    "rental", "hire", "bareboat",
+    # Équipements (EN)
+    "propeller", "rudder", "mast", "keel", "anchor", "winch", "furler",
+}
+
+# Keywords additionnels par code NAF
+_NAF_EXTRA_KEYWORDS: dict[str, set[str]] = {
+    "3315Z": {"reparation", "entretien", "maintenance", "refit", "soudure",
+              "repair", "service", "servicing", "overhaul"},
+    "3012Z": {"construction", "fabrication", "conception", "chantier", "composite",
+              "boatbuilding", "manufacturing", "design"},
+    "3011Z": {"construction", "fabrication", "naval", "navire",
+              "shipbuilding", "vessel"},
+    "5010Z": {"croisiere", "excursion", "traversee", "passagers", "ferry", "promenade",
+              "cruise", "crossing", "passenger", "trip"},
+    "5020Z": {"fret", "transport", "logistique", "fluvial",
+              "freight", "cargo", "shipping"},
+    "5222Z": {"manutention", "levage", "port", "capitainerie", "pilotage",
+              "handling", "piloting", "harbour", "harbor"},
+    "7734Z": {"location", "charter", "loueur", "louer",
+              "rental", "hire", "bareboat"},
+}
+
+_VERIFY_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
+}
 
 # ============================================================================
 # HELPERS
 # ============================================================================
 
 def normalize_name(name: str) -> str:
-    """Normalise a company name for comparison against a domain.
-
-    Lowercases and removes all non-alphanumeric characters.
-
-    Args:
-        name: Raw company name.
-
-    Returns:
-        Normalised alphanumeric string.
-    """
     name = name.lower()
     return re.sub(r"[^a-z0-9]", "", name)
 
 
 def _strip_to_root(url: str) -> str:
-    """Return the root URL (scheme + domain only), stripping any path.
-
-    Examples:
-        https://ap-yachting.fr/en/  →  https://ap-yachting.fr/
-        https://lecamus.fr/notre-entreprise/  →  https://lecamus.fr/
-
-    Args:
-        url: Any URL string.
-
-    Returns:
-        Scheme + netloc with trailing slash.
-    """
     try:
         p = urlparse(url)
         return f"{p.scheme}://{p.netloc}/"
@@ -115,14 +169,6 @@ def _strip_to_root(url: str) -> str:
 
 
 def _is_canadian(url: str) -> bool:
-    """Return True if the URL has a .ca TLD (Canadian domain).
-
-    Args:
-        url: URL to check.
-
-    Returns:
-        True if the domain ends with ``.ca``.
-    """
     try:
         domain = urlparse(url).netloc.lower().replace("www.", "")
         return domain.endswith(".ca")
@@ -131,17 +177,6 @@ def _is_canadian(url: str) -> bool:
 
 
 def _tld_priority(url: str) -> int:
-    """Return a sort key for TLD preference.  Lower is better.
-
-    .fr → 0  (clearly French, highest priority)
-    others → 1
-
-    Args:
-        url: Candidate URL.
-
-    Returns:
-        0 for .fr, 1 otherwise.
-    """
     try:
         domain = urlparse(url).netloc.lower().replace("www.", "")
         return 0 if domain.endswith(".fr") else 1
@@ -150,264 +185,456 @@ def _tld_priority(url: str) -> int:
 
 
 # ============================================================================
-# DDGS SEARCH
+# KEYWORD EXTRACTION
 # ============================================================================
 
-_VERIFY_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; bot/1.0)"}
+def _extract_keywords(denomination: str) -> list[str]:
+    """Extrait les mots-clés pour le matching domaine.
+
+    Accepte :
+    - mots ≥ 4 chars (standard)
+    - acronymes tout-majuscules ≥ 2 chars (AP, CIM, MSC…)
+    """
+    words = re.split(r"[\s\-_]+", denomination)
+    keywords: list[str] = []
+    for word in words:
+        if word.lower() in _STOP_WORDS:
+            continue
+        if not re.search(r"[a-zA-Z0-9]", word):
+            continue
+        if re.fullmatch(r"[A-Z0-9]{2,}", word):
+            keywords.append(word)
+        elif len(word) >= 4:
+            keywords.append(word)
+    return keywords
 
 
-def _verify_url(url: str, timeout: int = 6) -> bool:
-    """Return True if the URL responds with HTTP < 400.
+def _extract_alias(denomination: str) -> str | None:
+    """Extrait le nom commercial entre parenthèses.
 
-    Args:
-        url: Root URL to check.
-        timeout: Request timeout in seconds.
+    Exemples :
+      "GUYMARINE (GUYMARINE)"                  → "GUYMARINE"
+      "NAUTITECH CATAMARANS (CIM)"             → None  (≤3 chars)
+      "EMILIEN FAURENS (FAURSAIL OU FAURENS)"  → "FAURSAIL"
+    """
+    m = re.search(r"\(([^)]+)\)", denomination)
+    if not m:
+        return None
+    alias = m.group(1).strip()
+    if " OU " in alias.upper():
+        alias = re.split(r"\s+OU\s+", alias, flags=re.I)[0].strip()
+    if len(alias) <= 3:
+        return None
+    return alias if alias else None
+
+
+# ============================================================================
+# SECTOR DETECTION
+# ============================================================================
+
+def _extract_snippet(html: str) -> str:
+    """Extrait title + premier h1 + premier <p> ≥ 30 chars."""
+    parts: list[str] = []
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+    if m:
+        text = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+        if text:
+            parts.append(text[:120])
+    m = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.I | re.S)
+    if m:
+        text = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+        if text:
+            parts.append(text[:120])
+    for m in re.finditer(r"<p[^>]*>(.*?)</p>", html, re.I | re.S):
+        text = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+        if len(text) >= 30:
+            parts.append(text[:200])
+            break
+    return " | ".join(parts)[:400]
+
+
+def _is_secteur_ok(snippet: str, naf_code: str = "") -> bool:
+    """Retourne True si le snippet contient au moins un terme sectoriel."""
+    normalized = normalize_name(snippet)
+    keywords = _SECTEUR_KEYWORDS | _NAF_EXTRA_KEYWORDS.get(naf_code, set())
+    return any(kw in normalized for kw in keywords)
+
+
+# ============================================================================
+# CONFIDENCE SCORING
+# ============================================================================
+
+def _compute_confidence(
+    url: str,
+    keywords: list[str],
+    code_postal: str,
+    commune: str,
+    naf_code: str = "",
+) -> tuple[float, bool, str]:
+    """Calcule un score de confiance pour un couple (url, entreprise).
+
+    Signaux :
+      +2.0  keyword du nom dans le domaine
+      +0.5  TLD .fr
+      +1.5  code postal dans la page
+      +1.0  commune dans la page
 
     Returns:
-        True if accessible, False otherwise.
+        (score, secteur_ok, snippet)
     """
+    score = 0.0
+    snippet = ""
+    secteur_ok = False
+
+    domain = urlparse(url).netloc.lower().replace("www.", "")
+
+    if domain.endswith(".fr"):
+        score += 0.5
+
+    cleaned_domain = domain.replace(".", "").replace("-", "")
+    active_kws = [kw for kw in keywords if normalize_name(kw) not in _DOMAIN_NOISE_WORDS]
+    if active_kws and any(normalize_name(kw) in cleaned_domain for kw in active_kws):
+        score += 2.0
+
     try:
-        resp = requests.head(
-            url, timeout=timeout, allow_redirects=True, headers=_VERIFY_HEADERS
-        )
-        return resp.status_code < 400
+        resp = requests.get(url, timeout=8, allow_redirects=True, headers=_VERIFY_HEADERS)
+
+        if resp.status_code in {403, 429, 503}:
+            logger.debug("Anti-bot (%d) sur %s — score domaine seul : %.1f", resp.status_code, url, score)
+            return score, secteur_ok, snippet
+
+        if resp.status_code in {404, 410} or resp.status_code >= 400:
+            return 0.0, False, ""
+
+        page_text = resp.text
+        page_lower = page_text.lower()
+
+        snippet = _extract_snippet(page_text)
+        secteur_ok = _is_secteur_ok(snippet, naf_code)
+
+        if code_postal and code_postal in page_lower:
+            score += 1.5
+            logger.debug("Code postal %s trouvé dans %s → +1.5", code_postal, url)
+
+        if commune and normalize_name(commune) in normalize_name(page_lower):
+            score += 1.0
+            logger.debug("Commune '%s' trouvée dans %s → +1", commune, url)
+
+    except requests.exceptions.ConnectionError:
+        return 0.0, False, ""
     except Exception:
-        return False
+        pass
+
+    return score, secteur_ok, snippet
 
 
-def _ddgs_search(query: str, max_results: int = 10) -> list[dict]:
-    """Run a DDG text search and return results list."""
-    from ddgs import DDGS
-    return list(DDGS().text(query, max_results=max_results))
+# ============================================================================
+# DIRECT URL GUESSING (pass 0)
+# ============================================================================
+
+_LEGAL_SUFFIXES = {
+    "sa", "sas", "sarl", "eurl", "snc", "sca", "sci", "scp",
+    "ste", "ets", "coop", "association", "assoc",
+}
 
 
-def _pick_best_candidate(
-    results: list[dict],
-    keywords: list[str],
-) -> list[tuple[int, int, str]]:
-    """Filter DDG results and return sorted candidates [(tld_priority, rank, root_url)].
-
-    Returns an empty list if no candidate matches.
-
-    Matching rules :
-    - ``_DOMAIN_NOISE_WORDS`` (amélioration 2) : mots trop courants exclus du matching
-      (bordeaux, maritime, yachting…). Pas de filtre sur la longueur — les acronymes
-      spécifiques courts (MSC, AMEL, OCEA) sont des identifiants valides.
-    - ``DIRECTORY_DOMAINS`` + pattern ``autour-de-moi`` (amélioration 3) : annuaires
-      bloqués avant le matching.
-    - Si tous les mots du nom sont du bruit, on refuse plutôt qu'accepter n'importe quoi.
-    """
-    # Keywords effectifs : tout sauf les noise words (amélioration 2)
-    active_kws = [
-        kw for kw in keywords
-        if normalize_name(kw) not in _DOMAIN_NOISE_WORDS
+def _candidate_urls(search_name: str) -> list[str]:
+    tokens = [
+        t.lower() for t in re.split(r"[\s\-_]+", search_name)
+        if t and t.lower() not in _LEGAL_SUFFIXES
+        and re.search(r"[a-z0-9]", t.lower())
+        and len(t) >= 2
     ]
-    logger.debug("Active matching keywords (non-noise): %s", active_kws)
+    if not tokens:
+        return []
 
+    slugs: list[str] = []
+    slugs.append("".join(tokens))
+    if len(tokens) > 1:
+        slugs.append("-".join(tokens))
+    if len(tokens) > 1:
+        slugs.append(tokens[-1])
+    if len(tokens) > 2:
+        slugs.append("".join(tokens[:2]))
+        slugs.append("-".join(tokens[:2]))
+
+    seen: set[str] = set()
+    unique_slugs = [s for s in slugs if not (s in seen or seen.add(s))]  # type: ignore[func-returns-value]
+
+    urls = []
+    for slug in unique_slugs:
+        for tld in (".fr", ".com"):
+            urls.append(f"https://www.{slug}{tld}")
+            urls.append(f"https://{slug}{tld}")
+    return urls
+
+
+def _verify_url_direct(url: str, keywords: list[str], timeout: int = 8) -> bool:
+    """Vérifie qu'une URL directe est accessible et contient les keywords."""
+    try:
+        resp = requests.get(url, timeout=timeout, allow_redirects=True, headers=_VERIFY_HEADERS)
+        if resp.status_code in {404, 410}:
+            return False
+        if resp.status_code in {403, 429, 503}:
+            return True
+        if resp.status_code >= 400:
+            return False
+        page_text = normalize_name(resp.text)
+        return all(normalize_name(kw) in page_text for kw in keywords)
+    except requests.exceptions.ConnectionError:
+        return False
+    except Exception:
+        return True
+
+
+def _try_direct_urls(search_name: str, keywords: list[str]) -> str | None:
+    for url in _candidate_urls(search_name):
+        if _verify_url_direct(url, keywords):
+            return url
+    return None
+
+
+# ============================================================================
+# SEARCH ENGINE — DDG + fallback SearXNG
+# ============================================================================
+
+_SEARXNG_INSTANCES = [
+    "https://searx.be",
+    "https://paulgo.io",
+    "https://searxng.site",
+    "https://search.mdosch.de",
+]
+
+
+def _searxng_search(query: str, max_results: int = 10) -> list[dict]:
+    params = {"q": query, "format": "json", "engines": "google,bing,brave", "language": "fr-FR"}
+    for instance in _SEARXNG_INSTANCES:
+        try:
+            resp = requests.get(f"{instance}/search", params=params, timeout=8, headers=_VERIFY_HEADERS)
+            if resp.status_code != 200:
+                continue
+            raw = resp.json().get("results", [])[:max_results]
+            if raw:
+                return [{"href": r.get("url", ""), "title": r.get("title", ""), "body": r.get("content", "")} for r in raw]
+        except Exception:
+            continue
+    return []
+
+
+def _search(query: str, max_results: int = 10) -> list[dict]:
+    try:
+        from ddgs import DDGS as DDGS_NEW
+        results = list(DDGS_NEW().text(query, max_results=max_results))
+        if results:
+            return results
+    except ImportError:
+        try:
+            from duckduckgo_search import DDGS as DDGS_OLD
+            results = list(DDGS_OLD().text(query, max_results=max_results))
+            if results:
+                return results
+        except Exception:
+            pass
+    except Exception as exc:
+        logger.debug("ddgs erreur (%s) → bascule SearXNG", exc)
+    return _searxng_search(query, max_results)
+
+
+def _filter_candidates(results: list[dict], keywords: list[str]) -> list[tuple[int, int, str]]:
+    active_kws = [kw for kw in keywords if normalize_name(kw) not in _DOMAIN_NOISE_WORDS]
     candidates: list[tuple[int, int, str]] = []
     for rank, result in enumerate(results, 1):
         raw_url = result.get("href", "")
         if not raw_url:
             continue
-
-        # Normalise to root domain — companies are in France, paths don't matter
         url = _strip_to_root(raw_url)
         domain = urlparse(url).netloc.replace("www.", "")
         cleaned_domain = domain.replace(".", "").replace("-", "")
-        logger.debug("Checking rank %d: %s → root: %s", rank, raw_url, url)
 
-        # amélioration 3 — blocklist étendue
-        if domain in DIRECTORY_DOMAINS:
-            logger.warning("Skipping known directory domain: %s", domain)
+        if domain in DIRECTORY_DOMAINS or "autour-de-moi" in domain:
             continue
-        if "autour-de-moi" in domain:
-            logger.warning("Skipping directory domain (pattern): %s", domain)
-            continue
-
         if _is_canadian(url):
-            logger.warning("Skipping Canadian domain: %s", domain)
             continue
-
         if not active_kws:
-            # Tous les mots sont du bruit — refuser plutôt qu'accepter n'importe quoi
-            logger.debug("No active keywords after noise filter — skipping %s", domain)
             continue
-
-        matched = any(normalize_name(kw) in cleaned_domain for kw in active_kws)
-        if matched:
-            matched_kws = [kw for kw in active_kws if normalize_name(kw) in cleaned_domain]
+        if any(normalize_name(kw) in cleaned_domain for kw in active_kws):
             candidates.append((_tld_priority(url), rank, url))
-            logger.debug("Keyword match %s → domain '%s'", matched_kws, domain)
-        else:
-            logger.debug("No keyword match for domain '%s'", domain)
 
     candidates.sort(key=lambda x: (x[0], x[1]))
     return candidates
 
 
-def get_website_with_ddgs(denomination: str) -> tuple[str, str | None, int | None]:
-    """Search DuckDuckGo for a company website via the ddgs API (no browser).
+# ============================================================================
+# MAIN SEARCH FUNCTION
+# ============================================================================
 
-    Strategy:
-    1. Search ``<denomination> fr`` — build ranked candidate list.
-    2. If no candidates, retry with ``<denomination> nautisme`` as fallback.
-    3. For each candidate (best TLD/rank first), verify it responds (HTTP < 400).
-       The first accessible URL wins.
+def get_website(
+    denomination: str,
+    code_postal: str = "",
+    commune: str = "",
+    sector_keyword: str = "france",
+    naf_code: str = "",
+) -> tuple[str, str | None, float, str]:
+    """Recherche le site d'une entreprise avec scoring de confiance.
 
-    The URL is always normalised to the root domain (scheme + host) so that
-    paths like ``/en/`` are stripped — all targeted companies are in France.
-
-    Args:
-        denomination: Company legal name (denominationUniteLegale).
+    Passes :
+      0 — URL directe (devinée depuis le nom, sans moteur de recherche)
+      1 — alias (nom commercial entre parenthèses, si présent)
+      2 — {nom}
+      3 — {nom} {commune}
+      4 — {nom} {secteur}
 
     Returns:
-        Tuple ``(status, url, rank)`` where status is one of:
-            - ``'TROUVÉ'``     — a matching URL was found and verified
-            - ``'NON TROUVÉ'`` — no accessible match after both searches
-            - ``'ERREUR'``     — ddgs raised an exception
+        (statut, url, confiance, methode)
     """
-    logger.info("Searching for: '%s'", denomination)
+    logger.info("Recherche : '%s' (CP=%s, commune=%s, NAF=%s)", denomination, code_postal, commune, naf_code)
+
     try:
-        keywords = [
-            word for word in re.split(r"[\s-]+", denomination)
-            if word.lower() not in _STOP_WORDS and len(word) > 2
-        ]
+        search_name = re.sub(r"\s*\(.*?\)", "", denomination).strip()
+        keywords = _extract_keywords(denomination)
+        alias = _extract_alias(denomination)
 
-        # ── Pass 1 : "<denomination> fr" ────────────────────────────────────
-        results = _ddgs_search(f"{denomination} fr")
-        logger.debug("Pass 1 — %d results", len(results))
-        candidates = _pick_best_candidate(results, keywords)
+        # ── Pass 0 : URL directe ─────────────────────────────────────────────
+        direct_url = _try_direct_urls(search_name, [kw for kw in keywords if len(kw) >= 4])
+        if direct_url:
+            # Vérifie aussi le secteur pour les URLs directes
+            conf, secteur_ok, _ = _compute_confidence(direct_url, keywords, code_postal, commune, naf_code)
+            if secteur_ok or conf >= 4.0:
+                logger.info("Pass 0 (direct) → %s", direct_url)
+                return "TROUVÉ", direct_url, conf, "direct"
 
-        # ── Pass 2 : "site officiel" — remonte le vrai site d'entreprise ─────
-        # DDG rankera davantage le site propre qu'un annuaire pour cette requête.
-        if not candidates:
-            logger.info("No match in pass 1 — retrying with 'site officiel'.")
-            results2 = _ddgs_search(f"{denomination} site officiel")
-            logger.debug("Pass 2 — %d results", len(results2))
-            candidates = _pick_best_candidate(results2, keywords)
+        def _best(results: list[dict], pass_name: str, kws: list[str] | None = None) -> tuple[str, str, float, str] | None:
+            effective_kws = kws if kws is not None else keywords
+            for _, _, url in _filter_candidates(results, effective_kws):
+                conf, secteur_ok, snippet = _compute_confidence(url, effective_kws, code_postal, commune, naf_code)
+                if conf >= CONFIDENCE_THRESHOLD and secteur_ok:
+                    return "TROUVÉ", url, conf, pass_name
+                if conf >= CONFIDENCE_THRESHOLD:
+                    logger.debug("Secteur non détecté pour %s (conf=%.1f) — rejeté", url, conf)
+                else:
+                    logger.debug("Confiance insuffisante (%.1f) pour %s", conf, url)
+            return None
 
-        # ── Pass 3 : fallback with "nautisme" ────────────────────────────────
-        if not candidates:
-            logger.info("No match in pass 2 — retrying with 'nautisme' keyword.")
-            results3 = _ddgs_search(f"{denomination} nautisme")
-            logger.debug("Pass 3 — %d results", len(results3))
-            candidates = _pick_best_candidate(results3, keywords)
+        # ── Pass 1 : alias ───────────────────────────────────────────────────
+        if alias and alias.lower() != search_name.lower():
+            alias_kws = _extract_keywords(alias) or keywords
+            hit = _best(_search(alias), "DDG_alias", alias_kws)
+            if hit:
+                logger.info("Pass 1 alias '%s' → %s (conf=%.1f)", alias, hit[1], hit[2])
+                return hit
 
-        # ── Verify accessibility (first accessible candidate wins) ────────────
-        for best_priority, best_rank, best_url in candidates:
-            if _verify_url(best_url):
-                logger.info(
-                    "Best match for '%s': %s (TLD priority=%d, rank=%d)",
-                    denomination, best_url, best_priority, best_rank,
-                )
-                return "TROUVÉ", best_url, best_rank
-            logger.warning("URL not accessible, skipping: %s", best_url)
+        # ── Pass 2 : {nom} ───────────────────────────────────────────────────
+        hit = _best(_search(search_name), "DDG_nom")
+        if hit:
+            logger.info("Pass 2 nom → %s (conf=%.1f)", hit[1], hit[2])
+            return hit
 
-        logger.warning("No match found for '%s' after both search passes.", denomination)
-        return "NON TROUVÉ", None, None
+        # ── Pass 3 : {nom} {commune} ─────────────────────────────────────────
+        if commune:
+            hit = _best(_search(f"{search_name} {commune}"), "DDG_commune")
+            if hit:
+                logger.info("Pass 3 commune → %s (conf=%.1f)", hit[1], hit[2])
+                return hit
+
+        # ── Pass 4 : {nom} {secteur} ─────────────────────────────────────────
+        hit = _best(_search(f"{search_name} {sector_keyword}"), "DDG_secteur")
+        if hit:
+            logger.info("Pass 4 secteur → %s (conf=%.1f)", hit[1], hit[2])
+            return hit
+
+        logger.warning("Aucun site trouvé pour '%s'.", denomination)
+        return "NON TROUVÉ", None, 0.0, ""
 
     except Exception as exc:
-        logger.error("DDGS error for '%s': %s", denomination, exc, exc_info=True)
-        return "ERREUR", None, None
+        logger.error("Erreur pour '%s' : %s", denomination, exc, exc_info=True)
+        return "ERREUR", None, 0.0, ""
 
 
 # ============================================================================
 # MAIN PROCESSING LOOP
 # ============================================================================
 
-def process_companies(
-    config: FindWebsitesConfig,
-) -> None:
-    """Find websites for all companies in the input CSV and save results.
+def process_companies(config: FindWebsitesConfig) -> None:
+    """Cherche les sites pour toutes les entreprises du CSV d'entrée.
 
-    Supports resuming: rows with a non-empty ``statut_recherche`` that is not
-    ``'ERREUR'`` are skipped.  Results are written to disk after each row so
-    that progress is never lost on interruption.
-
-    Args:
-        config: Validated :class:`FindWebsitesConfig` instance.
+    Supporte la reprise : les lignes avec statut_recherche non vide (sauf ERREUR)
+    sont ignorées. Résultats écrits après chaque ligne.
     """
     output_dir = config.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     input_path = config.input_csv
-    stem = input_path.stem
-    output_path = output_dir / f"{stem}_websites.csv"
+    output_path = output_dir / f"{input_path.stem}_websites.csv"
 
-    logger.info(
-        "Starting website search — input='%s', output='%s', limit=%s",
-        input_path, output_path, config.limit,
-    )
+    logger.info("Démarrage — input='%s', output='%s', limit=%s", input_path, output_path, config.limit)
 
     try:
         df_input = pd.read_csv(input_path)
     except FileNotFoundError:
-        logger.error("Input file not found: '%s'", input_path)
+        logger.error("Fichier introuvable : '%s'", input_path)
         return
 
-    # ── Resume or start fresh ─────────────────────────────────────────────────
+    # ── Resume ou départ de zéro ──────────────────────────────────────────────
     if output_path.exists():
-        logger.info("Resuming from existing results: '%s'", output_path)
+        logger.info("Reprise depuis : '%s'", output_path)
         df_output = pd.read_csv(output_path)
-        for col in ("site_web", "statut_recherche", "source_site_web"):
+        for col in ("site_web", "statut_recherche", "source_site_web", "confiance", "secteur_ok"):
             if col not in df_output.columns:
                 df_output[col] = ""
     else:
-        logger.info("No existing results — starting from scratch.")
         df_output = df_input.copy()
         df_output["site_web"] = ""
         df_output["statut_recherche"] = ""
         df_output["source_site_web"] = ""
+        df_output["confiance"] = ""
+        df_output["secteur_ok"] = ""
 
-    for col in ("site_web", "statut_recherche", "source_site_web"):
+    for col in ("site_web", "statut_recherche", "source_site_web", "confiance", "secteur_ok"):
         df_output[col] = df_output[col].fillna("")
 
-    # ── Select rows to process ────────────────────────────────────────────────
     rows_to_process = df_output[df_output["statut_recherche"].isin(["", "ERREUR"])].copy()
     if config.limit:
         rows_to_process = rows_to_process.head(config.limit)
 
-    # Always write the output file upfront — even if empty or fully processed.
-    # This guarantees the pipeline's post-step existence check always passes.
     df_output.to_csv(output_path, index=False, encoding="utf-8")
 
     if rows_to_process.empty:
-        logger.info("All companies already processed — nothing to do.")
+        logger.info("Tout déjà traité — rien à faire.")
         return
 
-    logger.info("%d companies to process.", len(rows_to_process))
+    logger.info("%d entreprises à traiter.", len(rows_to_process))
 
     try:
-        for original_index, row in tqdm(
-            rows_to_process.iterrows(),
-            total=len(rows_to_process),
-            desc="Finding websites",
-        ):
+        for idx, row in tqdm(rows_to_process.iterrows(), total=len(rows_to_process), desc="Recherche sites"):
             denomination = row["denominationUniteLegale"]
-            status, website, rank = get_website_with_ddgs(denomination)
+            code_postal = str(row.get("codePostalEtablissement", "")).strip()
+            commune = str(row.get("libelleCommuneEtablissement", "")).strip()
+            naf_code = str(row.get("activitePrincipaleUniteLegale", "")).strip()
 
-            df_output.loc[original_index, "statut_recherche"] = status
-            df_output.loc[original_index, "site_web"] = website if status == "TROUVÉ" else ""
-            df_output.loc[original_index, "source_site_web"] = (
-                f"DDG Rank {rank}" if status == "TROUVÉ" else ""
+            status, website, conf, methode = get_website(
+                denomination, code_postal, commune, config.sector_keyword, naf_code
             )
 
-            # Save after every row to preserve progress
-            df_output.to_csv(output_path, index=False, encoding="utf-8")
-            logger.debug("Saved progress → '%s'", output_path)
+            found = status == "TROUVÉ"
+            df_output.loc[idx, "statut_recherche"] = status
+            df_output.loc[idx, "site_web"] = website if found else ""
+            df_output.loc[idx, "source_site_web"] = methode if found else ""
+            df_output.loc[idx, "confiance"] = str(round(conf, 1)) if found else ""
+            df_output.loc[idx, "secteur_ok"] = "True" if found else ""
 
-            time.sleep(random.uniform(3, 8))
+            df_output.to_csv(output_path, index=False, encoding="utf-8")
+            logger.debug("Sauvegardé → '%s'", output_path)
+
+            time.sleep(random.uniform(1, 3))
 
     except KeyboardInterrupt:
-        logger.warning("Interrupted by user — progress saved to '%s'.", output_path)
+        logger.warning("Interrompu — progression sauvegardée.")
         sys.exit(0)
     except Exception as exc:
-        logger.critical(
-            "Fatal error during processing: %s — progress saved.", exc, exc_info=True
-        )
+        logger.critical("Erreur fatale : %s — progression sauvegardée.", exc, exc_info=True)
         sys.exit(1)
 
-    logger.info("Processing complete — results saved to '%s'.", output_path)
+    logger.info("Terminé — résultats dans '%s'.", output_path)
 
 
 # ============================================================================
@@ -429,19 +656,27 @@ def process_companies(
     default=None,
     help="Limiter le nombre d'entreprises traitées (tests).",
 )
-def main(input_csv: str, output_dir: str, limit: int | None) -> None:
-    """Find company websites via DuckDuckGo API (ddgs, no browser).
+@click.option(
+    "--sector-keyword",
+    type=str,
+    default="france",
+    show_default=True,
+    help="Mot-clé secteur pour la passe 4 (ex: nautisme, vin, architecte).",
+)
+def main(input_csv: str, output_dir: str, limit: int | None, sector_keyword: str) -> None:
+    """Recherche les sites web des entreprises via DuckDuckGo (ddgs, sans navigateur).
 
-    INPUT_CSV is the filtered companies CSV produced by prospect_analyzer.py.
+    INPUT_CSV est le CSV de filtered_companies produit par prospect_analyzer.py.
     """
     setup_pipeline_logging(log_dir="Logs", sector_name="find_websites")
-    logger.info("find_websites.py started — input='%s'", input_csv)
+    logger.info("find_websites.py démarré — input='%s'", input_csv)
 
     try:
         config = FindWebsitesConfig(
             input_csv=Path(input_csv),
             output_dir=Path(output_dir),
             limit=limit,
+            sector_keyword=sector_keyword,
         )
     except ValidationError as exc:
         click.echo(f"Erreur de configuration :\n{exc}", err=True)
