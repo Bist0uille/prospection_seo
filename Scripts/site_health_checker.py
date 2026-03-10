@@ -250,12 +250,12 @@ def _detect_social_links(soup: BeautifulSoup) -> dict[str, str]:
 # ============================================================================
 
 def check_site(url: str, slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS) -> dict:
-    """Vérifie accessibilité, vitesse, blog, agence, copyright, réseaux sociaux.
+    """Vérifie accessibilité, vitesse, blog, agence, copyright, réseaux sociaux, responsive.
 
     Returns:
         Dict avec : is_down, down_reason, response_time_ms, is_slow,
         has_blog, blog_url, agence_detectee, agence_nom,
-        annee_copyright, site_ancien, reseaux_sociaux.
+        annee_copyright, site_ancien, reseaux_sociaux, is_responsive.
     """
     result: dict = {
         "is_down":           False,
@@ -271,6 +271,8 @@ def check_site(url: str, slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS) -> 
         "annee_copyright":   None,
         "site_ancien":       False,
         "reseaux_sociaux":   "",
+        # ── mobile ──────────────────────────────────────────
+        "is_responsive":     False,
     }
 
     if not url.startswith("http"):
@@ -338,6 +340,18 @@ def check_site(url: str, slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS) -> 
             f"{name}|{url}" for name, url in socials.items()
         )
 
+        # ── Responsive mobile ─────────────────────────────────────────────────
+        viewport = soup.find("meta", attrs={"name": re.compile(r"^viewport$", re.I)})
+        if viewport:
+            vp_content = viewport.get("content", "").lower()
+            if "width=device-width" in vp_content:
+                result["is_responsive"] = True
+        if not result["is_responsive"]:
+            for style_tag in soup.find_all("style"):
+                if "@media" in style_tag.get_text():
+                    result["is_responsive"] = True
+                    break
+
     except requests.exceptions.ConnectionError:
         result["is_down"]     = True
         result["down_reason"] = "Connexion impossible (DNS/refusée)"
@@ -373,9 +387,34 @@ def _classify(check: dict | None) -> tuple[str, float]:
         return "lent", float(PRIORITY["lent"])
     if check.get("site_ancien"):
         return "site_ancien", float(PRIORITY["site_ancien"])
-    if not check["has_blog"]:
+    if not check.get("has_blog"):
         return "sans_blog", float(PRIORITY["sans_blog"])
     return "ok", float(PRIORITY["ok"])
+
+
+def _build_problems(check: dict | None) -> str:
+    """Construit la liste lisible de tous les problèmes détectés sur un site.
+
+    Returns:
+        Chaîne de problèmes séparés par ' · ', ou 'Pas de site web' / 'Aucun problème'.
+    """
+    if check is None:
+        return "Pas de site web"
+    problems: list[str] = []
+    if check.get("is_down"):
+        reason = check.get("down_reason") or ""
+        problems.append(f"Inaccessible ({reason})" if reason else "Inaccessible")
+    if check.get("is_slow"):
+        rt = check.get("response_time_ms", "")
+        problems.append(f"Lent ({rt} ms)" if rt else "Lent")
+    if check.get("site_ancien"):
+        yr = check.get("annee_copyright", "")
+        problems.append(f"Site ancien (© {yr})" if yr else "Site ancien")
+    if not check.get("has_blog"):
+        problems.append("Sans blog / contenu")
+    if not check.get("is_responsive"):
+        problems.append("Non responsive mobile")
+    return " · ".join(problems) if problems else "Aucun problème détecté"
 
 
 # ============================================================================
@@ -387,11 +426,14 @@ def run_health_check(
     output_path: str,
     slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS,
     departements: list[str] | None = None,
+    secteur: str | None = None,
 ) -> str:
     logger.info(
-        "run_health_check('%s' → '%s', slow=%dms, depts=%s)",
-        input_path, output_path, slow_threshold_ms, departements,
+        "run_health_check('%s' → '%s', slow=%dms, depts=%s, secteur=%s)",
+        input_path, output_path, slow_threshold_ms, departements, secteur,
     )
+    # Secteur : utilise le paramètre ou infère depuis le dossier du fichier
+    _secteur = secteur or Path(input_path).parent.name
 
     df = pd.read_csv(input_path)
     if departements:
@@ -421,6 +463,7 @@ def run_health_check(
             "entreprise":       str(row.get("denominationUniteLegale", "")).strip(),
             "ville":            str(row.get("libelleCommuneEtablissement", "")).strip(),
             "departement":      _departement(row.get("codePostalEtablissement", "")),
+            "secteur":          _secteur,
             "site_web":         "",
             "is_down":          False,
             "down_reason":      None,
@@ -434,6 +477,8 @@ def run_health_check(
             "annee_copyright":  None,
             "site_ancien":      False,
             "reseaux_sociaux":  "",
+            "is_responsive":    None,
+            "problemes":        "Pas de site web",
             "signal":           "pas_de_site",
             "priorite_score":   float(PRIORITY["pas_de_site"]),
         })
@@ -462,6 +507,7 @@ def run_health_check(
             "entreprise":       company,
             "ville":            str(row.get("libelleCommuneEtablissement", "")).strip(),
             "departement":      _departement(row.get("codePostalEtablissement", "")),
+            "secteur":          _secteur,
             "site_web":         url,
             "is_down":          check["is_down"],
             "down_reason":      check["down_reason"],
@@ -475,6 +521,8 @@ def run_health_check(
             "annee_copyright":  check["annee_copyright"],
             "site_ancien":      check["site_ancien"],
             "reseaux_sociaux":  check["reseaux_sociaux"],
+            "is_responsive":    check["is_responsive"],
+            "problemes":        _build_problems(check),
             "signal":           signal,
             "priorite_score":   p_score,
         })
@@ -488,11 +536,10 @@ def run_health_check(
     logger.info("CSV écrit : %s (%d lignes)", output_path, len(result_df))
 
     html_path = output_path.replace(".csv", ".html")
-    _generate_html_report(result_df, html_path)
+    _generate_html_report(result_df, html_path, secteur=_secteur)
     logger.info("HTML : %s", html_path)
 
     counts = result_df["signal"].value_counts()
-    n_agence = int(result_df["agence_detectee"].sum())
     logger.info("=" * 55)
     logger.info("  RÉSULTATS — %d entreprises", total)
     logger.info("  %-16s : %d", "Pas de site",   counts.get("pas_de_site", 0))
@@ -501,7 +548,6 @@ def run_health_check(
     logger.info("  %-16s : %d", "Site ancien",    counts.get("site_ancien", 0))
     logger.info("  %-16s : %d", "Sans blog",      counts.get("sans_blog", 0))
     logger.info("  %-16s : %d", "OK",             counts.get("ok", 0))
-    logger.info("  %-16s : %d  (toutes catégories)", "Agence en place", n_agence)
     logger.info("=" * 55)
 
     return output_path
@@ -521,31 +567,34 @@ _SIGNAL_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
-    counts   = df["signal"].value_counts()
-    n_total  = len(df)
-    n_nosite = counts.get("pas_de_site", 0)
-    n_down   = counts.get("down", 0)
-    n_slow   = counts.get("lent", 0)
-    n_ancien = counts.get("site_ancien", 0)
-    n_noblog = counts.get("sans_blog", 0)
-    n_ok     = counts.get("ok", 0)
-    n_agence = int(df["agence_detectee"].sum())
+def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "") -> None:
+    counts    = df["signal"].value_counts()
+    n_total   = len(df)
+    n_nosite  = counts.get("pas_de_site", 0)
+    n_down    = counts.get("down", 0)
+    n_slow    = counts.get("lent", 0)
+    n_ancien  = counts.get("site_ancien", 0)
+    n_noblog  = counts.get("sans_blog", 0)
+    n_ok      = counts.get("ok", 0)
+
+    # Secteurs disponibles pour le filtre
+    secteurs = sorted(df["secteur"].dropna().astype(str).unique().tolist()) if "secteur" in df.columns else []
 
     rows_html: list[str] = []
     for _, row in df.iterrows():
-        signal          = str(row.get("signal", "ok"))
+        signal           = str(row.get("signal", "ok"))
         label, badge_cls = _SIGNAL_LABELS.get(signal, (signal, "ok"))
-        company         = str(row.get("entreprise", "") or "").title()
-        ville           = str(row.get("ville", "") or "").title()
-        dept            = str(row.get("departement", "") or "")
-        site            = str(row.get("site_web", "") or "")
-        domain          = urlparse(site).netloc.replace("www.", "") if site else ""
-        agence_det      = bool(row.get("agence_detectee"))
-        agence_nom      = str(row.get("agence_nom") or "").strip()
-        agence_url      = str(row.get("agence_url") or "").strip()
-        annee_copy      = row.get("annee_copyright")
-        reseaux         = str(row.get("reseaux_sociaux") or "").strip()
+        company          = str(row.get("entreprise", "") or "").title()
+        ville            = str(row.get("ville", "") or "").title()
+        ville_lower      = ville.lower()
+        dept             = str(row.get("departement", "") or "")
+        row_secteur      = str(row.get("secteur", "") or "")
+        site             = str(row.get("site_web", "") or "")
+        domain           = urlparse(site).netloc.replace("www.", "") if site else ""
+        annee_copy       = row.get("annee_copyright")
+        reseaux          = str(row.get("reseaux_sociaux") or "").strip()
+        is_responsive    = row.get("is_responsive")
+        problemes        = str(row.get("problemes") or "").strip()
 
         # Lien site
         site_td = (
@@ -569,27 +618,6 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
             if down_reason and down_reason not in ("nan", "None")
             else '<span class="na">—</span>'
         )
-
-        # Blog
-        blog_url = str(row.get("blog_url") or "").strip()
-        if bool(row.get("has_blog")) and blog_url and blog_url not in ("nan", "None"):
-            blog_td = f'<span class="chip chip-ok">Oui</span> <a class="blog-link" href="{blog_url}" target="_blank">↗</a>'
-        elif bool(row.get("has_blog")):
-            blog_td = '<span class="chip chip-ok">Oui</span>'
-        elif signal == "pas_de_site":
-            blog_td = '<span class="na">—</span>'
-        else:
-            blog_td = '<span class="chip chip-bad">Non</span>'
-
-        # Agence
-        if agence_det:
-            ag_label = agence_nom[:28] if agence_nom and agence_nom not in ("nan", "None") else "Oui"
-            if agence_url and agence_url not in ("nan", "None"):
-                agence_td = f'<a href="{agence_url}" target="_blank" class="chip chip-agence" title="{agence_nom}">{ag_label} ↗</a>'
-            else:
-                agence_td = f'<span class="chip chip-agence" title="{agence_nom}">{ag_label}</span>'
-        else:
-            agence_td = '<span class="na">—</span>'
 
         # Copyright / ancienneté
         if annee_copy and str(annee_copy) not in ("nan", "None", ""):
@@ -616,30 +644,55 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
         else:
             social_td = '<span class="na">—</span>'
 
-        # data-agence pour filtre JS
-        data_agence = "1" if agence_det else "0"
+        # Responsive mobile
+        if is_responsive is None or str(is_responsive) in ("nan", "None", ""):
+            resp_td = '<span class="na">—</span>'
+        elif bool(is_responsive) is True or str(is_responsive).lower() == "true":
+            resp_td = '<span class="chip chip-ok">✓ Oui</span>'
+        else:
+            resp_td = '<span class="chip chip-bad">✗ Non</span>'
+
+        # Problèmes SEO
+        if problemes and problemes not in ("nan", "None", "Aucun problème détecté"):
+            problems_parts = [p.strip() for p in problemes.split("·") if p.strip()]
+            pb_chips = " ".join(f'<span class="chip chip-problem">{p}</span>' for p in problems_parts)
+            pb_td = pb_chips
+        elif problemes == "Aucun problème détecté":
+            pb_td = '<span class="chip chip-ok">Aucun problème</span>'
+        else:
+            pb_td = '<span class="na">—</span>'
 
         rows_html.append(f"""
-    <tr data-signal="{signal}" data-agence="{data_agence}">
+    <tr data-signal="{signal}" data-ville="{ville_lower}" data-dept="{dept}" data-secteur="{row_secteur}">
       <td class="center"><span class="badge {badge_cls}">{label}</span></td>
       <td class="name">{company}</td>
       <td class="geo">{ville} <span class="dept">{dept}</span></td>
       <td class="url">{site_td}</td>
       <td class="center">{rt_html}</td>
-      <td class="center">{blog_td}</td>
-      <td class="center">{agence_td}</td>
       <td class="center">{copy_td}</td>
+      <td class="center">{resp_td}</td>
       <td class="center">{social_td}</td>
+      <td class="problems">{pb_td}</td>
       <td class="center">{down_td}</td>
     </tr>""")
 
     all_rows = "\n".join(rows_html)
 
+    # Secteur dropdown HTML
+    secteur_title = f" — {secteur.capitalize()}" if secteur else ""
+    if len(secteurs) > 1:
+        _opts = '<option value="all">Tous les secteurs</option>' + "".join(
+            f'<option value="{s}">{s.capitalize()}</option>' for s in secteurs
+        )
+        secteur_filter_html = f'<select id="secteurFilter" class="filter-select">{_opts}</select>'
+    else:
+        secteur_filter_html = ""
+
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Site Health Check — Prospects Web</title>
+<title>Site Health Check — Prospects Web{secteur_title}</title>
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -647,7 +700,7 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
   .header h1 {{ font-size: 22px; font-weight: 700; color: #1a237e; }}
   .header p  {{ font-size: 13px; color: #757575; margin-top: 4px; }}
 
-  .meta {{ display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; margin-bottom: 22px; }}
+  .meta {{ display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; margin-bottom: 18px; }}
   .meta-card {{
     background: #fff; padding: 12px 18px; border-radius: 8px;
     box-shadow: 0 1px 4px rgba(0,0,0,.1); min-width: 110px;
@@ -661,15 +714,23 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
   .meta-card.p1  {{ border-top-color: #b71c1c; }} .meta-card.p1  .num {{ color: #b71c1c; }}
   .meta-card.p2  {{ border-top-color: #c62828; }} .meta-card.p2  .num {{ color: #c62828; }}
   .meta-card.p3  {{ border-top-color: #e65100; }} .meta-card.p3  .num {{ color: #e65100; }}
-  .meta-card.p4  {{ border-top-color: #f9a825; }} .meta-card.p4  .num {{ color: #e65100; }}
-  .meta-card.p5  {{ border-top-color: #1565c0; }} .meta-card.p5  .num {{ color: #1565c0; }}
+  .meta-card.p4  {{ border-top-color: #f9a825; }} .meta-card.p4  .num {{ color: #f57f17; }}
+  .meta-card.p5  {{ border-top-color: #7b1fa2; }} .meta-card.p5  .num {{ color: #7b1fa2; }}
   .meta-card.pok {{ border-top-color: #388e3c; }} .meta-card.pok .num {{ color: #388e3c; }}
   .meta-card.all {{ border-top-color: #757575; }} .meta-card.all .num {{ color: #424242; }}
-  .meta-card.pag {{ border-top-color: #7b1fa2; }} .meta-card.pag .num {{ color: #7b1fa2; }}
 
-  .filters {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }}
-  .filters label {{ font-size: 12px; color: #555; }}
-  .filters input[type=checkbox] {{ margin-right: 4px; }}
+  .filters {{ display: flex; gap: 12px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }}
+  .filter-input {{
+    padding: 7px 12px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; min-width: 220px; outline: none;
+    transition: border-color .15s;
+  }}
+  .filter-input:focus {{ border-color: #1a237e; }}
+  .filter-select {{
+    padding: 7px 12px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; background: #fff; cursor: pointer; outline: none;
+  }}
+  .filter-label {{ font-size: 12px; color: #757575; }}
 
   table {{ width: 100%; border-collapse: collapse; background: #fff;
            box-shadow: 0 1px 4px rgba(0,0,0,.12); border-radius: 8px; overflow: hidden; }}
@@ -685,10 +746,10 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
            padding: 1px 5px; border-radius: 8px; font-size: 10px; font-weight: 700; margin-left: 3px; }}
   .url a {{ color: #1565c0; text-decoration: none; font-size: 12px; }}
   .url a:hover {{ text-decoration: underline; }}
+  .problems {{ font-size: 11px; max-width: 280px; }}
   .center {{ text-align: center; }}
   .na {{ color: #bdbdbd; font-size: 11px; }}
   .down-reason {{ color: #b71c1c; font-size: 11px; }}
-  .blog-link {{ color: #1565c0; text-decoration: none; font-size: 11px; margin-left: 3px; }}
 
   /* Badges signal principal */
   .badge {{ display: inline-block; padding: 3px 9px; border-radius: 12px;
@@ -697,58 +758,56 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
   .priority2 {{ background: #ffebee; color: #c62828; }}
   .priority3 {{ background: #fff3e0; color: #e65100; }}
   .priority4 {{ background: #fff8e1; color: #f57f17; }}
-  .priority5 {{ background: #e3f2fd; color: #1565c0; }}
+  .priority5 {{ background: #f3e5f5; color: #7b1fa2; }}
   .ok        {{ background: #e8f5e9; color: #2e7d32; }}
 
   /* Chips inline */
-  .chip {{ display: inline-block; padding: 1px 7px; border-radius: 10px;
-           font-size: 10px; font-weight: 600; white-space: nowrap; }}
-  .chip-ok     {{ background: #e8f5e9; color: #2e7d32; }}
-  .chip-bad    {{ background: #ffebee; color: #c62828; }}
-  .chip-agence {{ background: #f3e5f5; color: #7b1fa2; max-width: 140px;
-                  overflow: hidden; text-overflow: ellipsis; display: inline-block;
-                  text-decoration: none; }}
-  a.chip-agence:hover {{ background: #e1bee7; }}
-  .chip-social {{ background: #e8eaf6; color: #283593; text-decoration: none; }}
+  .chip {{ display: inline-block; padding: 2px 7px; border-radius: 10px;
+           font-size: 10px; font-weight: 600; white-space: nowrap; margin: 1px; }}
+  .chip-social  {{ background: #e8eaf6; color: #283593; text-decoration: none; }}
+  .chip-ok      {{ background: #e8f5e9; color: #2e7d32; }}
+  .chip-bad     {{ background: #ffebee; color: #c62828; }}
+  .chip-problem {{ background: #fff3e0; color: #bf360c; }}
   a.chip-social:hover {{ background: #c5cae9; text-decoration: none; }}
+
+  .no-results {{ text-align: center; color: #9e9e9e; padding: 32px; font-size: 14px; display: none; }}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>Site Health Check — Prospects Web</h1>
-  <p>Analyse complète · {n_total} entreprises · signaux commerciaux + techniques</p>
+  <h1>Site Health Check — Prospects Web{secteur_title}</h1>
+  <p>Analyse complète · {n_total} entreprises · signaux commerciaux + techniques + mobile</p>
 </div>
 
 <div class="meta">
-  <div class="meta-card all" data-filter="all" data-agence="all">
+  <div class="meta-card all" data-filter="all">
     <div class="num">{n_total}</div><div class="lbl">Total</div>
   </div>
-  <div class="meta-card p1" data-filter="pas_de_site" data-agence="all">
+  <div class="meta-card p1" data-filter="pas_de_site">
     <div class="num">{n_nosite}</div><div class="lbl">Pas de site</div>
   </div>
-  <div class="meta-card p2" data-filter="down" data-agence="all">
+  <div class="meta-card p2" data-filter="down">
     <div class="num">{n_down}</div><div class="lbl">Down</div>
   </div>
-  <div class="meta-card p3" data-filter="lent" data-agence="all">
+  <div class="meta-card p3" data-filter="lent">
     <div class="num">{n_slow}</div><div class="lbl">Lents</div>
   </div>
-  <div class="meta-card p4" data-filter="site_ancien" data-agence="all">
+  <div class="meta-card p4" data-filter="site_ancien">
     <div class="num">{n_ancien}</div><div class="lbl">Site ancien</div>
   </div>
-  <div class="meta-card p5" data-filter="sans_blog" data-agence="all">
+  <div class="meta-card p5" data-filter="sans_blog">
     <div class="num">{n_noblog}</div><div class="lbl">Sans blog</div>
   </div>
-  <div class="meta-card pok" data-filter="ok" data-agence="all">
+  <div class="meta-card pok" data-filter="ok">
     <div class="num">{n_ok}</div><div class="lbl">OK</div>
-  </div>
-  <div class="meta-card pag" data-filter="all" data-agence="1">
-    <div class="num">{n_agence}</div><div class="lbl">Agence en place</div>
   </div>
 </div>
 
 <div class="filters">
-  <label><input type="checkbox" id="hide-agence"> Masquer les entreprises avec agence en place</label>
+  <span class="filter-label">Filtrer :</span>
+  <input type="search" id="villeFilter" class="filter-input" placeholder="🔍 Ville ou département (ex: 33)…">
+  {secteur_filter_html}
 </div>
 
 <table>
@@ -759,10 +818,10 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
   <th>Ville</th>
   <th>Site web</th>
   <th>Temps rép.</th>
-  <th>Blog</th>
-  <th>Agence</th>
   <th>Copyright</th>
+  <th>Responsive</th>
   <th>Réseaux</th>
+  <th>Problèmes SEO</th>
   <th>Raison down</th>
 </tr>
 </thead>
@@ -770,47 +829,42 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
 {all_rows}
 </tbody>
 </table>
+<div class="no-results" id="noResults">Aucun résultat pour ces filtres.</div>
 
 <script>
-  const cards    = document.querySelectorAll('.meta-card');
-  const rows     = document.querySelectorAll('tbody tr');
-  const hideBox  = document.getElementById('hide-agence');
-
-  let activeFilter = 'all';
-  let hideAgence   = false;
+  const cards  = document.querySelectorAll('.meta-card');
+  const rows   = document.querySelectorAll('tbody tr');
+  const villeInput   = document.getElementById('villeFilter');
+  const secteurSel   = document.getElementById('secteurFilter');
+  const noResults    = document.getElementById('noResults');
+  let activeSignal   = 'all';
 
   function applyFilters() {{
+    const villeVal   = villeInput ? villeInput.value.toLowerCase().trim() : '';
+    const secteurVal = secteurSel ? secteurSel.value : 'all';
+    let visible = 0;
     rows.forEach(row => {{
-      const signalMatch = activeFilter === 'all' || row.dataset.signal === activeFilter;
-      const agenceMatch = !hideAgence || row.dataset.agence !== '1';
-      row.classList.toggle('hidden', !(signalMatch && agenceMatch));
+      const signalOk  = activeSignal === 'all' || row.dataset.signal === activeSignal;
+      const villeOk   = villeVal === '' || row.dataset.ville.includes(villeVal) || row.dataset.dept === villeVal;
+      const secteurOk = secteurVal === 'all' || row.dataset.secteur === secteurVal;
+      const show = signalOk && villeOk && secteurOk;
+      row.classList.toggle('hidden', !show);
+      if (show) visible++;
     }});
+    noResults.style.display = visible === 0 ? 'block' : 'none';
   }}
 
   cards.forEach(card => {{
     card.addEventListener('click', () => {{
       cards.forEach(c => c.classList.remove('active'));
       card.classList.add('active');
-      const agenceFilter = card.dataset.agence;
-      if (agenceFilter === '1') {{
-        activeFilter = 'all';
-        hideAgence = false;
-        hideBox.checked = false;
-        // Show only agence rows
-        rows.forEach(row => {{
-          row.classList.toggle('hidden', row.dataset.agence !== '1');
-        }});
-        return;
-      }}
-      activeFilter = card.dataset.filter;
+      activeSignal = card.dataset.filter;
       applyFilters();
     }});
   }});
 
-  hideBox.addEventListener('change', () => {{
-    hideAgence = hideBox.checked;
-    applyFilters();
-  }});
+  if (villeInput)  villeInput.addEventListener('input', applyFilters);
+  if (secteurSel)  secteurSel.addEventListener('change', applyFilters);
 
   document.querySelector('.meta-card.all').classList.add('active');
 </script>
@@ -831,13 +885,16 @@ def _generate_html_report(df: pd.DataFrame, output_path: str) -> None:
 @click.option("--slow-threshold", type=int, default=DEFAULT_SLOW_THRESHOLD_MS, show_default=True)
 @click.option("--departements", type=str, default=None,
               help="Codes département séparés par virgule (ex: 17,33).")
-def main(input_csv, output, slow_threshold, departements):
+@click.option("--secteur", type=str, default=None,
+              help="Nom du secteur (ex: nautisme). Inféré depuis le dossier si absent.")
+def main(input_csv, output, slow_threshold, departements, secteur):
     """Site health checker — classe les entreprises par besoin web réel.
 
     \b
     Exemples :
       python Scripts/site_health_checker.py Results/nautisme/filtered_companies_websites.csv
       python Scripts/site_health_checker.py Results/nautisme/filtered_companies_websites.csv --departements 17,33
+      python Scripts/site_health_checker.py Results/nautisme/filtered_companies_websites.csv --secteur nautisme
     """
     input_path = Path(input_csv)
     if output is None:
@@ -846,7 +903,12 @@ def main(input_csv, output, slow_threshold, departements):
     dept_list = [d.strip() for d in departements.split(",")] if departements else None
 
     setup_pipeline_logging(log_dir="Logs", sector_name="site_health_checker")
-    run_health_check(input_csv, output, slow_threshold_ms=slow_threshold, departements=dept_list)
+    run_health_check(
+        input_csv, output,
+        slow_threshold_ms=slow_threshold,
+        departements=dept_list,
+        secteur=secteur,
+    )
 
 
 if __name__ == "__main__":

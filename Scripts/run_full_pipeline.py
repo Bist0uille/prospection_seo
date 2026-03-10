@@ -403,6 +403,7 @@ def main(
     find_cmd = [
         python_cmd, "Scripts/find_websites.py",
         filtered_csv, "--output-dir", output_dir,
+        "--sector-keyword", sector_name,
     ]
     if config.limit:
         find_cmd += ["--limit", str(config.limit)]

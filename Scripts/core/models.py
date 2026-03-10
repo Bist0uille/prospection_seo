@@ -219,6 +219,10 @@ class FindWebsitesConfig(BaseModel):
         gt=0,
         description="Max number of companies to process (testing).",
     )
+    sector_keyword: str = Field(
+        default="france",
+        description="Keyword used in pass-3 fallback search (e.g. 'nautisme', 'vin').",
+    )
 
     @field_validator("input_csv")
     @classmethod

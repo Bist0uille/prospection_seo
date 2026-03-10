@@ -9,6 +9,3 @@
 5020Z - Transports maritimes et côtiers de fret
 5222Z - Services auxiliaires des transports par eau
 7734Z - Location et location-bail de matériels de transport par eau
-7721Z - Location d'articles de loisirs et de sport (bateaux plaisance)
-4764Z - Commerce de détail d'articles de sport (accastillage)
-9329Z - Autres activités récréatives et de loisirs (marinas)
