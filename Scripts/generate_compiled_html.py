@@ -1,12 +1,12 @@
-"""Génère un rapport HTML filtrable à partir du CSV compilé."""
-import pandas as pd
+"""Génère un rapport HTML filtrable depuis la base SQLite nautisme_na.db."""
 import json
+import sqlite3
+import pandas as pd
 from pathlib import Path
 
-INPUT_COMPILED   = Path("Results/nautisme_na/filtered_companies_websites_compiled.csv")
-INPUT_VERIF      = Path("Results/nautisme_na/v1_verification.csv")
-INPUT_COMPANIES  = Path("Results/nautisme_na/filtered_companies.csv")
-OUTPUT = Path("Results/nautisme_na/compiled_report.html")
+DB_PATH = Path("DataBase/prospection.db")
+SECTOR  = "nautisme_na"
+OUTPUT  = Path("Results/nautisme_na/compiled_report.html")
 
 # Codes INSEE tranche effectifs → (label court, ordre de tri)
 TRANCHE_EFFECTIFS = {
@@ -28,55 +28,41 @@ TRANCHE_EFFECTIFS = {
     "53": ("10 000+",   15),
 }
 
-df = pd.read_csv(INPUT_COMPILED).fillna("")
+# ── Chargement depuis SQLite ──────────────────────────────────────────────────
+conn = sqlite3.connect(DB_PATH)
+conn.row_factory = sqlite3.Row
 
-# Joindre la tranche d'effectifs depuis filtered_companies.csv
-if INPUT_COMPANIES.exists():
-    eff = pd.read_csv(INPUT_COMPANIES, usecols=["siren", "trancheEffectifsUniteLegale"]).copy()
-    eff["siren"] = eff["siren"].astype(str)
-    df["siren"]  = df["siren"].astype(str)
-    df = df.merge(eff, on="siren", how="left")
-    df["trancheEffectifsUniteLegale"] = df["trancheEffectifsUniteLegale"].fillna("NN").astype(str)
-else:
-    df["trancheEffectifsUniteLegale"] = "NN"
+df = pd.read_sql_query("""
+    SELECT
+        e.siren,
+        e.denomination          AS denominationUniteLegale,
+        e.naf                   AS activitePrincipaleUniteLegale,
+        e.tranche_effectifs     AS trancheEffectifsUniteLegale,
+        e.code_postal           AS codePostalEtablissement,
+        e.commune               AS libelleCommuneEtablissement,
+        e.date_creation         AS dateCreationUniteLegale,
+        COALESCE(s.url, '')     AS site_web_final,
+        COALESCE(s.statut, 'NON TROUVÉ') AS statut_final,
+        COALESCE(s.source, '') AS source,
+        COALESCE(CAST(s.confiance AS TEXT), '') AS confiance_final,
+        s.secteur_ok,
+        s.antibot,
+        s.down_erreur,
+        s.under_construction
+    FROM entreprises e
+    LEFT JOIN sites_web s ON e.siren = s.siren AND e.secteur = s.secteur
+    WHERE e.secteur = ?
+""", conn, params=(SECTOR,)).fillna("")
 
-# Intègre les signaux de qualité (secteur confirmé, anti-bot, down)
-# Pour les sites trouvés par l'ancienne méthode, on a la vérif manuelle.
-# Pour les sites trouvés par la nouvelle méthode, secteur_ok=True par construction.
-_UC_KEYWORDS = [
-    "under construction", "coming soon", "en construction",
-    "site en cours", "en cours de", "actuellement en", "maintenance",
-    "bientôt", "bientot", "we're working", "we are working",
-    "site is down", "offline", "be back soon",
-]
+conn.close()
 
-def _is_under_construction(snippet: str) -> bool:
-    s = str(snippet).lower()
-    return any(k in s for k in _UC_KEYWORDS)
+# Normaliser les types pour le JS
+df["secteur_ok"]         = df["secteur_ok"].apply(lambda v: "True" if v == 1 else ("False" if v == 0 else ""))
+df["antibot"]            = df["antibot"].apply(lambda v: "True" if v == 1 else "False")
+df["down_erreur"]        = df["down_erreur"].apply(lambda v: "True" if v == 1 else "False")
+df["under_construction"] = df["under_construction"].apply(lambda v: bool(v))
 
-if INPUT_VERIF.exists():
-    verif = pd.read_csv(INPUT_VERIF)[["siren","secteur_ok","antibot","down_erreur","snippet"]].copy()
-    verif["siren"] = verif["siren"].astype(str)
-    verif["under_construction"] = verif["snippet"].apply(_is_under_construction)
-    df["siren"] = df["siren"].astype(str)
-    df = df.merge(verif, on="siren", how="left")
-    # Sites trouvés par la nouvelle méthode : secteur garanti
-    mask_new = df["source"] == "v2"
-    df.loc[mask_new, "secteur_ok"]         = True
-    df.loc[mask_new, "antibot"]            = False
-    df.loc[mask_new, "down_erreur"]        = False
-    df.loc[mask_new, "under_construction"] = False
-    df["secteur_ok"]         = df["secteur_ok"].fillna("").astype(str)
-    df["antibot"]            = df["antibot"].fillna("False").astype(str)
-    df["down_erreur"]        = df["down_erreur"].fillna("False").astype(str)
-    df["under_construction"] = df["under_construction"].fillna(False).astype(bool)
-else:
-    df["secteur_ok"]         = ""
-    df["antibot"]            = "False"
-    df["down_erreur"]        = "False"
-    df["under_construction"] = False
-
-# Faux positifs clairs (hors secteur, pas UC, pas antibot, pas down) → traités comme NON TROUVÉ
+# Faux positifs (secteur_ok=False, pas UC, pas antibot, pas down) → NON TROUVÉ
 mask_fp = (
     (df["statut_final"] == "TROUVÉ") &
     (df["secteur_ok"] == "False") &
@@ -84,12 +70,12 @@ mask_fp = (
     (df["antibot"] != "True") &
     (df["down_erreur"] != "True")
 )
-df.loc[mask_fp, "statut_final"] = "NON TROUVÉ"
+df.loc[mask_fp, "statut_final"]  = "NON TROUVÉ"
 df.loc[mask_fp, "site_web_final"] = ""
 
-rows = df.to_dict(orient="records")
-naf_values  = sorted(df["activitePrincipaleUniteLegale"].unique().tolist())
-villes      = sorted(df["libelleCommuneEtablissement"].unique().tolist())
+rows       = df.to_dict(orient="records")
+naf_values = sorted(df["activitePrincipaleUniteLegale"].unique().tolist())
+villes     = sorted(df["libelleCommuneEtablissement"].unique().tolist())
 
 NAF_LABELS = {
     "3315Z": "Réparation navires",
@@ -239,6 +225,7 @@ html = f"""<!DOCTYPE html>
       <th onclick="sortBy('libelleCommuneEtablissement')" data-col="libelleCommuneEtablissement">Ville <span class="sort-icon">↕</span></th>
       <th onclick="sortBy('activitePrincipaleUniteLegale')" data-col="activitePrincipaleUniteLegale">NAF <span class="sort-icon">↕</span></th>
       <th onclick="sortBy('trancheEffectifsUniteLegale')" data-col="trancheEffectifsUniteLegale">Effectif <span class="sort-icon">↕</span></th>
+      <th onclick="sortBy('dateCreationUniteLegale')" data-col="dateCreationUniteLegale">Création <span class="sort-icon">↕</span></th>
       <th>Site web</th>
       <th onclick="sortBy('statut_final')" data-col="statut_final">Statut / Fiabilité <span class="sort-icon">↕</span></th>
       <th onclick="sortBy('confiance_final')" data-col="confiance_final">Conf. <span class="sort-icon">↕</span></th>
@@ -308,6 +295,13 @@ VILLES.forEach(v => {{
   o.value = o.textContent = v;
   document.getElementById('f-ville').appendChild(o);
 }});
+
+function fmtDate(d) {{
+  if (!d || d === 'nan') return '—';
+  // Format ISO YYYY-MM-DD → affiche MM/YYYY
+  const m = d.match(/^(\\d{{4}})-(\\d{{2}})/);
+  return m ? m[2] + '/' + m[1] : d;
+}}
 
 function qualite(r) {{
   if (r.statut_final !== 'TROUVÉ') return '';
@@ -433,6 +427,7 @@ function render() {{
       <td>${{r.libelleCommuneEtablissement}}</td>
       <td>${{naf}}${{nafSub}}</td>
       <td style="text-align:center;font-size:.75rem;${{trancheStyle}}">${{trancheLabel}}</td>
+      <td style="text-align:center;font-size:.75rem;white-space:nowrap;color:#6b7280">${{fmtDate(r.dateCreationUniteLegale)}}</td>
       <td>${{site}}</td>
       <td>${{statBadge}}${{raisonBadge}}</td>
       <td>${{confBadge}}</td>

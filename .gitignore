@@ -1,3 +1,9 @@
+# Secrets
+.env
+
+# Base SQLite (régénérable via db_init.py)
+DataBase/*.db
+
 # Python
 __pycache__/
 *.pyc
