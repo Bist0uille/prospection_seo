@@ -69,6 +69,18 @@ PRIORITY: dict[str, int] = {
     "ok":           6,
 }
 
+# ── Tranches d'effectifs INSEE → (label affiché, ordre de tri) ───────────────
+_TRANCHE_LABELS: dict[str, tuple[str, int]] = {
+    "NN": ("0",          0), "00": ("0",          0),
+    "01": ("1-2",        1), "02": ("3-5",        2), "03": ("6-9",        3),
+    "11": ("10-19",      4), "12": ("20-49",      5),
+    "21": ("50-99",      6), "22": ("100-199",    7),
+    "31": ("200-249",    8), "32": ("250-499",    9),
+    "41": ("500-999",   10), "42": ("1 000-1 999",11),
+    "51": ("2 000-4 999",12), "52": ("5 000-9 999",13),
+    "53": ("10 000+",   14),
+}
+
 # ── Réseaux sociaux détectés ──────────────────────────────────────────────────
 _SOCIAL_DOMAINS: dict[str, str] = {
     "facebook.com":  "Facebook",
@@ -436,6 +448,9 @@ def run_health_check(
     _secteur = secteur or Path(input_path).parent.name
 
     df = pd.read_csv(input_path)
+    # Compatibilité CSV compilé (colonnes _final)
+    if "site_web_final" in df.columns and "site_web" not in df.columns:
+        df = df.rename(columns={"site_web_final": "site_web", "statut_final": "statut_recherche"})
     if departements:
         df = filter_by_departements(df, departements)
 
@@ -459,28 +474,30 @@ def run_health_check(
     # ── Sans site ─────────────────────────────────────────────────────────────
     for _, row in without_site.iterrows():
         rows.append({
-            "siren":            str(row.get("siren", "")).strip(),
-            "entreprise":       str(row.get("denominationUniteLegale", "")).strip(),
-            "ville":            str(row.get("libelleCommuneEtablissement", "")).strip(),
-            "departement":      _departement(row.get("codePostalEtablissement", "")),
-            "secteur":          _secteur,
-            "site_web":         "",
-            "is_down":          False,
-            "down_reason":      None,
-            "response_time_ms": None,
-            "is_slow":          False,
-            "has_blog":         False,
-            "blog_url":         None,
-            "agence_detectee":  False,
-            "agence_nom":       None,
-            "agence_url":       None,
-            "annee_copyright":  None,
-            "site_ancien":      False,
-            "reseaux_sociaux":  "",
-            "is_responsive":    None,
-            "problemes":        "Pas de site web",
-            "signal":           "pas_de_site",
-            "priorite_score":   float(PRIORITY["pas_de_site"]),
+            "siren":              str(row.get("siren", "")).strip(),
+            "entreprise":         str(row.get("denominationUniteLegale", "")).strip(),
+            "ville":              str(row.get("libelleCommuneEtablissement", "")).strip(),
+            "departement":        _departement(row.get("codePostalEtablissement", "")),
+            "secteur":            _secteur,
+            "tranche_effectifs":  str(row.get("trancheEffectifsUniteLegale", "") or "").strip(),
+            "date_creation":      str(row.get("dateCreationUniteLegale", "") or "").strip(),
+            "site_web":           "",
+            "is_down":            False,
+            "down_reason":        None,
+            "response_time_ms":   None,
+            "is_slow":            False,
+            "has_blog":           False,
+            "blog_url":           None,
+            "agence_detectee":    False,
+            "agence_nom":         None,
+            "agence_url":         None,
+            "annee_copyright":    None,
+            "site_ancien":        False,
+            "reseaux_sociaux":    "",
+            "is_responsive":      None,
+            "problemes":          "Pas de site web",
+            "signal":             "pas_de_site",
+            "priorite_score":     float(PRIORITY["pas_de_site"]),
         })
 
     # ── Avec site ─────────────────────────────────────────────────────────────
@@ -503,28 +520,30 @@ def run_health_check(
         )
 
         rows.append({
-            "siren":            str(row.get("siren", "")).strip(),
-            "entreprise":       company,
-            "ville":            str(row.get("libelleCommuneEtablissement", "")).strip(),
-            "departement":      _departement(row.get("codePostalEtablissement", "")),
-            "secteur":          _secteur,
-            "site_web":         url,
-            "is_down":          check["is_down"],
-            "down_reason":      check["down_reason"],
-            "response_time_ms": check["response_time_ms"],
-            "is_slow":          check["is_slow"],
-            "has_blog":         check["has_blog"],
-            "blog_url":         check["blog_url"],
-            "agence_detectee":  check["agence_detectee"],
-            "agence_nom":       check["agence_nom"],
-            "agence_url":       check["agence_url"],
-            "annee_copyright":  check["annee_copyright"],
-            "site_ancien":      check["site_ancien"],
-            "reseaux_sociaux":  check["reseaux_sociaux"],
-            "is_responsive":    check["is_responsive"],
-            "problemes":        _build_problems(check),
-            "signal":           signal,
-            "priorite_score":   p_score,
+            "siren":              str(row.get("siren", "")).strip(),
+            "entreprise":         company,
+            "ville":              str(row.get("libelleCommuneEtablissement", "")).strip(),
+            "departement":        _departement(row.get("codePostalEtablissement", "")),
+            "secteur":            _secteur,
+            "tranche_effectifs":  str(row.get("trancheEffectifsUniteLegale", "") or "").strip(),
+            "date_creation":      str(row.get("dateCreationUniteLegale", "") or "").strip(),
+            "site_web":           url,
+            "is_down":            check["is_down"],
+            "down_reason":        check["down_reason"],
+            "response_time_ms":   check["response_time_ms"],
+            "is_slow":            check["is_slow"],
+            "has_blog":           check["has_blog"],
+            "blog_url":           check["blog_url"],
+            "agence_detectee":    check["agence_detectee"],
+            "agence_nom":         check["agence_nom"],
+            "agence_url":         check["agence_url"],
+            "annee_copyright":    check["annee_copyright"],
+            "site_ancien":        check["site_ancien"],
+            "reseaux_sociaux":    check["reseaux_sociaux"],
+            "is_responsive":      check["is_responsive"],
+            "problemes":          _build_problems(check),
+            "signal":             signal,
+            "priorite_score":     p_score,
         })
 
     result_df = (
@@ -595,6 +614,8 @@ def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "")
         reseaux          = str(row.get("reseaux_sociaux") or "").strip()
         is_responsive    = row.get("is_responsive")
         problemes        = str(row.get("problemes") or "").strip()
+        tranche          = str(row.get("tranche_effectifs", "") or "").strip()
+        date_creation    = str(row.get("date_creation", "") or "").strip()
 
         # Lien site
         site_td = (
@@ -662,11 +683,40 @@ def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "")
         else:
             pb_td = '<span class="na">—</span>'
 
+        # Effectif (tranche INSEE)
+        t_label, t_sort = _TRANCHE_LABELS.get(tranche, ("", -1))
+        if t_label:
+            eff_color = "#166534" if t_sort >= 6 else ("#92400e" if t_sort >= 3 else "#374151")
+            effectif_td = f'<span style="font-size:11px;font-weight:600;color:{eff_color}">{t_label}</span>'
+        else:
+            effectif_td = '<span class="na">—</span>'
+            t_sort = -1
+
+        # Date de création
+        if date_creation and date_creation not in ("nan", "None", ""):
+            annee_creat = date_creation[:4]
+            creation_td = f'<span style="font-size:11px;color:#555">{annee_creat}</span>'
+            creation_sort = date_creation  # YYYY-MM-DD → tri lexicographique correct
+        else:
+            creation_td = '<span class="na">—</span>'
+            creation_sort = ""
+
+        # Valeurs de tri pour data-attrs
+        rt_sort   = int(float(rt)) if rt is not None and str(rt) not in ("nan", "None", "") else 0
+        copy_sort = int(float(annee_copy)) if annee_copy and str(annee_copy) not in ("nan", "None", "") else 0
+        resp_sort = 1 if str(is_responsive).lower() == "true" else (0 if str(is_responsive) in ("nan", "None", "", "False") else -1)
+        p_score   = row.get("priorite_score", 99)
+
         rows_html.append(f"""
-    <tr data-signal="{signal}" data-ville="{ville_lower}" data-dept="{dept}" data-secteur="{row_secteur}">
+    <tr data-signal="{signal}" data-ville="{ville_lower}" data-dept="{dept}" data-secteur="{row_secteur}"
+        data-priorite="{p_score}" data-company="{company.lower()}"
+        data-effectif="{t_sort}" data-creation="{creation_sort}"
+        data-rt="{rt_sort}" data-copyright="{copy_sort}" data-responsive="{resp_sort}">
       <td class="center"><span class="badge {badge_cls}">{label}</span></td>
       <td class="name">{company}</td>
       <td class="geo">{ville} <span class="dept">{dept}</span></td>
+      <td class="center">{effectif_td}</td>
+      <td class="center">{creation_td}</td>
       <td class="url">{site_td}</td>
       <td class="center">{rt_html}</td>
       <td class="center">{copy_td}</td>
@@ -736,6 +786,11 @@ def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "")
            box-shadow: 0 1px 4px rgba(0,0,0,.12); border-radius: 8px; overflow: hidden; }}
   thead th {{ background: #1a237e; color: #fff; font-size: 10px; font-weight: 600;
               text-transform: uppercase; letter-spacing: .5px; padding: 11px 12px; text-align: left; }}
+  thead th[data-col] {{ cursor: pointer; user-select: none; }}
+  thead th[data-col]:hover {{ background: #283593; }}
+  .sort-icon {{ opacity: .35; margin-left: 3px; font-size: 10px; }}
+  thead th.sorted {{ background: #283593; }}
+  thead th.sorted .sort-icon {{ opacity: 1; }}
   tbody tr {{ border-bottom: 1px solid #f0f0f0; transition: background .1s; }}
   tbody tr:hover {{ background: #fafafa; }}
   tbody tr.hidden {{ display: none; }}
@@ -813,13 +868,15 @@ def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "")
 <table>
 <thead>
 <tr>
-  <th>Signal</th>
-  <th>Entreprise</th>
-  <th>Ville</th>
+  <th data-col="priorite" onclick="sortBy(this)">Signal <span class="sort-icon">↕</span></th>
+  <th data-col="company" onclick="sortBy(this)">Entreprise <span class="sort-icon">↕</span></th>
+  <th data-col="ville" onclick="sortBy(this)">Ville <span class="sort-icon">↕</span></th>
+  <th data-col="effectif" onclick="sortBy(this)">Effectif <span class="sort-icon">↕</span></th>
+  <th data-col="creation" onclick="sortBy(this)">Création <span class="sort-icon">↕</span></th>
   <th>Site web</th>
-  <th>Temps rép.</th>
-  <th>Copyright</th>
-  <th>Responsive</th>
+  <th data-col="rt" onclick="sortBy(this)">Temps rép. <span class="sort-icon">↕</span></th>
+  <th data-col="copyright" onclick="sortBy(this)">Copyright <span class="sort-icon">↕</span></th>
+  <th data-col="responsive" onclick="sortBy(this)">Responsive <span class="sort-icon">↕</span></th>
   <th>Réseaux</th>
   <th>Problèmes SEO</th>
   <th>Raison down</th>
@@ -832,18 +889,22 @@ def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "")
 <div class="no-results" id="noResults">Aucun résultat pour ces filtres.</div>
 
 <script>
-  const cards  = document.querySelectorAll('.meta-card');
-  const rows   = document.querySelectorAll('tbody tr');
-  const villeInput   = document.getElementById('villeFilter');
-  const secteurSel   = document.getElementById('secteurFilter');
-  const noResults    = document.getElementById('noResults');
-  let activeSignal   = 'all';
+  const cards      = document.querySelectorAll('.meta-card');
+  const tbody      = document.querySelector('tbody');
+  const villeInput = document.getElementById('villeFilter');
+  const secteurSel = document.getElementById('secteurFilter');
+  const noResults  = document.getElementById('noResults');
+  let activeSignal = 'all';
+  let sortCol      = null;
+  let sortDir      = 1;
+
+  function getRows() {{ return Array.from(tbody.querySelectorAll('tr')); }}
 
   function applyFilters() {{
     const villeVal   = villeInput ? villeInput.value.toLowerCase().trim() : '';
     const secteurVal = secteurSel ? secteurSel.value : 'all';
     let visible = 0;
-    rows.forEach(row => {{
+    getRows().forEach(row => {{
       const signalOk  = activeSignal === 'all' || row.dataset.signal === activeSignal;
       const villeOk   = villeVal === '' || row.dataset.ville.includes(villeVal) || row.dataset.dept === villeVal;
       const secteurOk = secteurVal === 'all' || row.dataset.secteur === secteurVal;
@@ -852,6 +913,26 @@ def _generate_html_report(df: pd.DataFrame, output_path: str, secteur: str = "")
       if (show) visible++;
     }});
     noResults.style.display = visible === 0 ? 'block' : 'none';
+  }}
+
+  const NUMERIC_COLS = new Set(['priorite', 'effectif', 'rt', 'copyright', 'responsive']);
+
+  function sortBy(th) {{
+    const col = th.dataset.col;
+    if (sortCol === col) {{ sortDir *= -1; }} else {{ sortCol = col; sortDir = 1; }}
+    document.querySelectorAll('thead th').forEach(t => t.classList.remove('sorted'));
+    th.classList.add('sorted');
+
+    const allRows = getRows();
+    allRows.sort((a, b) => {{
+      const va = a.dataset[col] || '';
+      const vb = b.dataset[col] || '';
+      if (NUMERIC_COLS.has(col)) {{
+        return (parseFloat(va) - parseFloat(vb)) * sortDir;
+      }}
+      return va.localeCompare(vb, 'fr') * sortDir;
+    }});
+    allRows.forEach(r => tbody.appendChild(r));
   }}
 
   cards.forEach(card => {{
