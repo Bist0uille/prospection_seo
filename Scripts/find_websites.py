@@ -370,21 +370,21 @@ def _candidate_urls(search_name: str) -> list[str]:
 
 
 def _verify_url_direct(url: str, keywords: list[str], timeout: int = 8) -> bool:
-    """Vérifie qu'une URL directe est accessible et contient les keywords."""
+    """Vérifie qu'une URL directe est accessible et contient les keywords.
+
+    Exige une réponse 200 : les 403/503 (anti-bot) ne sont plus acceptés
+    pour éviter de valider un domaine aléatoire qui bloque les robots.
+    """
     try:
         resp = requests.get(url, timeout=timeout, allow_redirects=True, headers=_VERIFY_HEADERS)
-        if resp.status_code in {404, 410}:
-            return False
-        if resp.status_code in {403, 429, 503}:
-            return True
-        if resp.status_code >= 400:
+        if resp.status_code != 200:
             return False
         page_text = normalize_name(resp.text)
         return all(normalize_name(kw) in page_text for kw in keywords)
     except requests.exceptions.ConnectionError:
         return False
     except Exception:
-        return True
+        return False
 
 
 def _try_direct_urls(search_name: str, keywords: list[str]) -> str | None:
