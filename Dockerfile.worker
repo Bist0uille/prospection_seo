@@ -1,0 +1,23 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# System deps for Playwright fallback (contact_scraper)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY apps/api/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# API code (ORM models, config, workers)
+COPY apps/api/app/ /app/app/
+COPY apps/api/workers/ /app/workers/
+COPY apps/api/alembic.ini /app/alembic.ini
+
+# Pipeline scripts
+COPY Scripts/ /app/Scripts/
+
+ENV PYTHONPATH=/app
+
+CMD ["celery", "-A", "workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
